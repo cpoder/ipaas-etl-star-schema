@@ -5,7 +5,7 @@
 #   ./deploy.sh data       -> regenerate the ~1M source rows (English labels; data-fr: French labels)
 #   ./deploy.sh is         -> connections + adapter services + flows + UI
 #   ./deploy.sh ui         -> copy the UI only
-#   ./deploy.sh export     -> copy the deployed IS package back into packages/StarSchemaETL
+#   ./deploy.sh export     -> copy the deployed IS package into the package repository (../StarSchemaETL, or PKG_REPO)
 set -euo pipefail
 cd "$(dirname "$0")"
 IS_HOME=${IS_HOME:-/home/cpo/wm12/IntegrationServer/instances/default}
@@ -37,10 +37,11 @@ is() {
   python3 wm/flows.py       # document types + flow services (putNode)
   ui
 }
-export_pkg() {   # copy the deployed package back into packages/ (manifest, ns without the JDBC connections, pub)
-  local src=$IS_HOME/packages/StarSchemaETL dst=packages/StarSchemaETL
-  rm -rf "$dst" && mkdir -p "$dst/pub" && cp "$src/manifest.v3" "$dst/" && cp -r "$src/ns" "$dst/ns" && rm -rf "$dst/ns/star/connections"
-  cp ui/index.html ui/flows.html "$dst/pub/" && echo "[export] $(find "$dst" -type f | wc -l) files in $dst"
+export_pkg() {   # copy the deployed package into the package repository (manifest, ns without the JDBC connections, pub)
+  local src=$IS_HOME/packages/StarSchemaETL dst=${PKG_REPO:-../StarSchemaETL}
+  [ -d "$dst/.git" ] || { echo "package repository not found: $dst (git clone https://github.com/cpoder/StarSchemaETL)"; exit 1; }
+  rm -rf "$dst/ns" "$dst/pub" && cp "$src/manifest.v3" "$dst/" && cp -r "$src/ns" "$dst/ns" && rm -rf "$dst/ns/star/connections"
+  mkdir -p "$dst/pub" && cp ui/index.html ui/flows.html "$dst/pub/" && echo "[export] $(find "$dst" -type f -not -path '*/.git/*' | wc -l) files in $dst (commit, tag and push it there)"
 }
 ui() {
   mkdir -p "$PKG_DIR/pub"

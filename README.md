@@ -111,23 +111,27 @@ SELECT * FROM dwh.v_etl_last_run;      -- log of the last run
 SELECT * FROM dwh.v_reconciliation;    -- rows and amounts, source vs facts
 ```
 
-## Installing the package without wm-mcp-server
+## Installing the package with wpm (no agent, no MCP server)
 
-`packages/StarSchemaETL` is the Integration Server package exactly as deployed (manifest, namespace tree with the
-document types, JDBC adapter services and flow services, UI in `pub/`). To install it on an IS 12.1 with the JDBC
-adapter and the PostgreSQL driver:
+The package as deployed lives in its own repository, in the layout expected by wpm (webMethods Package Manager) and
+the webMethods Package Registry: https://github.com/cpoder/StarSchemaETL (`manifest.v3` at the root, tag `v1.0.0`).
 
-1. Copy the `packages/StarSchemaETL` folder into `IntegrationServer/instances/default/packages/` (or zip its content
-   and use Packages > Management > Install Inbound Releases), then activate or reload the package.
-2. Create the two JDBC adapter connections the package expects (they are environment specific and are not shipped):
-   `star.connections:dwh` (transaction type LOCAL_TRANSACTION, other properties `BatchPerformanceWorkaround=true`)
-   and `star.connections:dwhLog` (NO_TRANSACTION), both on `localhost:5435`, database, user and password `stardemo`,
-   data source class `com.wm.dd.jdbcx.postgresql.PostgreSQLDataSource`. `python3 wm/package.py` creates them through
-   wm-mcp-server if you have it.
-3. Enable the connections and reload the package: the adapter services bind to them, the UI is served at
-   `http://localhost:5555/StarSchemaETL/index.html`.
+```bash
+wpm install -r https://github.com/cpoder StarSchemaETL
+```
 
-`./deploy.sh export` refreshes `packages/StarSchemaETL` from the running IS after a rebuild.
+Without wpm: clone that repository into `IntegrationServer/instances/default/packages/StarSchemaETL` (or zip its
+content and use Packages > Management > Install Inbound Releases), then activate the package. The JDBC connections
+are environment specific and are not shipped: create `star.connections:dwh` (LOCAL_TRANSACTION, other properties
+`BatchPerformanceWorkaround=true`) and `star.connections:dwhLog` (NO_TRANSACTION) in Adapters > JDBC Adapter, data
+source class `com.wm.dd.jdbcx.postgresql.PostgreSQLDataSource`, `localhost:5435`, database, user and password
+`stardemo`, enable them and reload the package. `python3 wm/package.py` does the same through wm-mcp-server.
+
+Verified on IS 12.1: git clone of the tag into `packages/`, reload (69 nodes, 0 error), connections created, step tests
+`ALL OK`, full pipeline with 4 parallel batches reconciled with the source.
+
+`./deploy.sh export` refreshes the package repository (`../StarSchemaETL` or `PKG_REPO`) from the running IS after a
+rebuild; commit, tag and push it there.
 
 ## Redeploy / rebuild
 
