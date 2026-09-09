@@ -1,185 +1,183 @@
-# Démo ETL : webMethods Integration Server à la place d'un ETL classique (schéma en étoile)
+# ETL demo: webMethods Integration Server instead of a classic ETL (star schema)
 
-Scénario de référence : les données de l'ERP arrivent en tables de *staging* (réplication d'un data lake),
-sont normalisées puis transformées en tables de faits, avec des sous-flux de moins de 5 minutes.
-La démo reproduit ce schéma sur un cas concret : une **table de commandes « classique »** (client, commercial,
-produit, quantité, prix unitaire, ~1 million de lignes) transformée par webMethods Integration Server en un
-**schéma en étoile** (table de faits centrale + 4 dimensions dont une dimension temporelle), avec une UI de
-pilotage et de visualisation en quasi temps réel.
+Reference scenario: ERP data lands in *staging* tables (replication of a data lake), is normalized, then
+transformed into fact tables, with sub-flows of less than 5 minutes each.
+The demo reproduces this pattern on a concrete case: a **flat, classic order table** (customer, sales rep,
+product, quantity, unit price, about 1 million rows) transformed by webMethods Integration Server into a
+**star schema** (central fact table + 4 dimensions, including a time dimension), with a control and
+near-real-time visualization UI.
 
 ```
- staging.orders (999 343 lignes, 245 Mo)                     dwh (schéma en étoile)
+ staging.orders (999,343 rows, 245 MB)                       dwh (star schema)
  ┌─────────────────────────────────────┐                     ┌──────────────┐
- │ order_id, order_date                │   webMethods IS     │  dim_date    │ 1 096 (calculée en flow)
- │ customer_code, name, city, dept, …  │ ─── package ──────▶ │  dim_customer│ 5 000
- │ salesrep_code, name, region         │   StarSchemaETL        │  dim_salesrep│   143
- │ product_code, name, category, brand │  (flows + JDBC)     │  dim_product │ 2 000
- │ quantity, unit_price                │                     │  fact_sales  │ 999 343 (amount = qté × PU)
+ │ order_id, order_date                │   webMethods IS     │  dim_date    │ 1,096 (computed in the flow)
+ │ customer_code, name, city, dept, …  │ ─── package ──────▶ │  dim_customer│ 5,000
+ │ salesrep_code, name, region         │   StarSchemaETL     │  dim_salesrep│   143
+ │ product_code, name, category, brand │  (flows + JDBC)     │  dim_product │ 2,000
+ │ quantity, unit_price                │                     │  fact_sales  │ 999,343 (amount = qty × unit price)
  └─────────────────────────────────────┘                     └──────────────┘
 ```
 
-## Captures d'écran
+## Screenshots
 
-Pipeline en cours (4 lots en parallèle, journal des sous-flux, lignes source et lignes chargées) :
+Pipeline running (4 batches in parallel, sub-flow log, source rows and loaded rows):
 
-![Pipeline en cours](docs/screenshots/pipeline-en-cours.png)
+![Pipeline running](docs/screenshots/pipeline-running.png)
 
-Pipeline terminé et réconcilié (999 343 faits en 51,5 s), explorateur par trimestre, contenu de la dimension temporelle :
+Pipeline done and reconciled (999,343 facts in 51.5 s), explorer by quarter, contents of the time dimension:
 
-![Pipeline terminé](docs/screenshots/pipeline-termine-explorateur.png)
+![Pipeline done](docs/screenshots/pipeline-done-explorer.png)
 
-Chiffre d'affaires par mois calculé sur le schéma en étoile, et page des flows générée depuis l'Integration Server :
+Revenue by month computed on the star schema, and the flows page generated from the Integration Server:
 
-![CA mensuel](docs/screenshots/ca-mensuel.png)
+![Monthly revenue](docs/screenshots/monthly-revenue.png)
 
 ![Flows](docs/screenshots/flows.png)
 
-## Composants
+## Components
 
-| Élément | Où | Détail |
+| Item | Where | Details |
 |---|---|---|
-| Base PostgreSQL 16 | conteneur Docker `stardemo-db`, port **5435** (`stardemo`/`stardemo`, surchargeables par `DB_NAME`, `PG_PORT`, `DB_CONTAINER`) | `db/01_schema.sql` (schémas `staging`, `dwh`, journal `etl_run_log`, pilotage `etl_control`), `db/02_generate_data.sql` (jeu de données reproductible) |
-| Integration Server 12.1 | `$IS_HOME` (défaut `/home/cpo/wm12/IntegrationServer/instances/default`), port **5555** (`Administrator`/`manage`) | package **StarSchemaETL** (namespace `star.*`) |
-| Connexions JDBC | `star.connections:dwh` (LOCAL_TRANSACTION), `star.connections:dwhLog` (NO_TRANSACTION) | adaptateur JDBC 10.3, driver DataDirect PostgreSQL |
-| Services adaptateur | `star.adapters:*` | 24 services CustomSQL / BatchInsert (`wm/adapters.py`) |
-| Flows | `star.etl.steps:*`, `star.etl:*` | générés en JSON putNode (`wm/flows.py`) |
-| API UI | `star.api:status / start / stop / reset` | JSON via `/invoke/star.api/<service>` |
+| PostgreSQL 16 | Docker container `stardemo-db`, port **5435** (`stardemo`/`stardemo`, overridable with `DB_NAME`, `PG_PORT`, `DB_CONTAINER`) | `db/01_schema.sql` (schemas `staging`, `dwh`, log `etl_run_log`, control `etl_control`), `db/02_generate_data.sql` (reproducible data set) |
+| Integration Server 12.1 | `$IS_HOME` (default `/home/cpo/wm12/IntegrationServer/instances/default`), port **5555** (`Administrator`/`manage`) | package **StarSchemaETL** (namespace `star.*`) |
+| JDBC connections | `star.connections:dwh` (LOCAL_TRANSACTION), `star.connections:dwhLog` (NO_TRANSACTION) | JDBC adapter 10.3, DataDirect PostgreSQL driver |
+| Adapter services | `star.adapters:*` | 24 CustomSQL / BatchInsert services (`wm/adapters.py`) |
+| Flows | `star.etl.steps:*`, `star.etl:*` | generated as putNode JSON (`wm/flows.py`) |
+| UI API | `star.api:status / start / stop / reset` | JSON through `/invoke/star.api/<service>` |
 | UI | `ui/index.html` → `packages/StarSchemaETL/pub/index.html` | **http://localhost:5555/StarSchemaETL/index.html** |
 
 ### Flows
 
-- `star.etl:runPipeline` (orchestrateur, variantes `runPipelineX2` / `runPipelineX4` avec `MAX-THREADS` sur
-  la LOOP) : TRUNCATE_STAR → DIM_DATE → DIM_CUSTOMER → DIM_SALESREP → DIM_PRODUCT → plan de lots
-  (`selectChunks`, `generate_series` sur `order_line_id`) → LOOP : un sous-flux `loadFactChunk` par lot,
-  journalisé, avec test du drapeau d'arrêt à chaque lot ; total relu en base après la boucle.
-- `star.etl.steps:loadDates` (dimension temporelle) : pour chaque date distincte de la source (1 096 jours), le
-  flow calcule avec `pub.date:dateTimeFormat` (locale `fr_FR`, règle ISO), `pub.math` et un BRANCH :
+- `star.etl:runPipeline` (orchestrator, variants `runPipelineX2` / `runPipelineX4` with `MAX-THREADS` on the
+  LOOP): TRUNCATE_STAR → DIM_DATE → DIM_CUSTOMER → DIM_SALESREP → DIM_PRODUCT → batch plan
+  (`selectChunks`, `generate_series` on `order_line_id`) → LOOP: one `loadFactChunk` sub-flow per batch,
+  logged, with the stop flag checked at every batch; total read back from the database after the loop.
+- `star.etl.steps:loadDates` (time dimension): for each distinct date of the source (1,096 days), the flow
+  computes with `pub.date:dateTimeFormat` (locale `en_GB`, ISO rule), `pub.math` and a BRANCH:
 
-  | Colonne | Exemple | Calcul dans le flow |
+  | Column | Example | Computation in the flow |
   |---|---|---|
-  | `date_key` | 20250908 | pattern `yyyyMMdd` (clé de la table de faits) |
-  | `year_num`, `quarter_num`, `quarter_label` | 2025, 3, `2025-T3` | `yyyy` ; trimestre = (mois + 2) / 3 (`pub.math:addInts`, `divideInts`) ; libellé par substitution `%dates/year_num%-T%dates/quarter_num%` |
-  | `month_num`, `month_name`, `year_month` | 9, septembre, `2025-09` | `M`, `MMMM`, `yyyy-MM` |
-  | `week_of_year`, `year_week` | 37, `2025-S37` | `w` et `YYYY-'S'ww` en locale `fr_FR` : semaines ISO (lundi, 4 jours minimum), donc 2023-01-01 → `2022-S52`, 2024-12-30 → `2025-S01` |
-  | `day_of_month`, `day_of_week`, `day_name` | 8, 1, lundi | `d`, `u` (1 = lundi … 7 = dimanche), `EEEE` |
-  | `is_weekend` | false | BRANCH sur `day_of_week` (6, 7 → true) |
+  | `date_key` | 20250908 | pattern `yyyyMMdd` (fact table key) |
+  | `year_num`, `quarter_num`, `quarter_label` | 2025, 3, `2025-Q3` | `yyyy`; quarter = (month + 2) / 3 (`pub.math:addInts`, `divideInts`); label by substitution `%dates/year_num%-Q%dates/quarter_num%` |
+  | `month_num`, `month_name`, `year_month` | 9, September, `2025-09` | `M`, `MMMM`, `yyyy-MM` |
+  | `week_of_year`, `year_week` | 37, `2025-W37` | `w` and `YYYY-'W'ww` in locale `en_GB`: ISO weeks (Monday, 4 days minimum), so 2023-01-01 → `2022-W52`, 2024-12-30 → `2025-W01` |
+  | `day_of_month`, `day_of_week`, `day_name` | 8, 1, Monday | `d`, `u` (1 = Monday … 7 = Sunday), `EEEE` |
+  | `is_weekend` | false | BRANCH on `day_of_week` (6, 7 → true) |
 
-  Les axes Année / Trimestre / Mois / Semaine (ISO) / Jour de semaine de l'explorateur s'appuient sur ces colonnes.
-- `star.etl.steps:loadFactChunk` : `startTransaction` → extraction du lot avec résolution des clés de
-  substitution par jointure → LOOP ligne à ligne (projection + `amount = quantity × unit_price` via
-  `pub.math:multiplyFloats`) → `BatchInsert` (un seul `executeBatch`) → `commitTransaction` ; `rollback` en CATCH.
-- `star.etl:startPipeline` : lancement asynchrone par le scheduler IS (`pub.scheduler:addOneTimeTask`, +3 s).
-- `star.etl.steps:logStep` : journalise chaque étape (durée calculée par le flow) dans `dwh.etl_run_log`,
-  sur la connexion sans transaction, donc visible immédiatement par l'UI.
+  The Year / Quarter / Month / Week (ISO) / Weekday axes of the explorer rely on these columns.
+- `star.etl.steps:loadFactChunk`: `startTransaction` → extraction of the batch with surrogate-key
+  resolution by join → row-by-row LOOP (projection + `amount = quantity × unit_price` with
+  `pub.math:multiplyFloats`) → `BatchInsert` (a single `executeBatch`) → `commitTransaction`; `rollback` in CATCH.
+- `star.etl:startPipeline`: asynchronous start through the IS scheduler (`pub.scheduler:addOneTimeTask`, +3 s).
+- `star.etl.steps:logStep`: logs every step (duration computed by the flow) in `dwh.etl_run_log`,
+  on the non-transactional connection, so it is visible immediately to the UI.
 
-### Vues complémentaires
+### Additional views
 
-- **http://localhost:5555/StarSchemaETL/flows.html** : arbre des étapes de chaque flow service (généré par `wm/flowdoc.py`),
-  pratique pour expliquer la logique sans ouvrir Designer.
-- Panneau **Explorer le schéma en étoile** dans l'UI : requêtes par dimension (année, trimestre, mois, jour, segment,
-  département, client, région, commercial, catégorie, marque, produit × CA, quantités, lignes, panier moyen) et
-  contenu des tables de dimension, rafraîchis pendant le chargement.
-- **Parallélisme** : sélecteur 1 / 2 / 4 lots simultanés (orchestrateurs `runPipeline`, `runPipelineX2`,
-  `runPipelineX4`, LOOP parallèle native `MAX-THREADS`).
+- **http://localhost:5555/StarSchemaETL/flows.html**: step tree of every flow service (generated by `wm/flowdoc.py`),
+  handy to explain the logic without opening Designer.
+- **Explore the star schema** panel in the UI: queries by dimension (year, quarter, month, day, segment,
+  department, customer, region, sales rep, category, brand, product × revenue, quantities, lines, average line
+  amount) and dimension table contents, refreshed while loading.
+- **Parallelism**: 1 / 2 / 4 simultaneous batches selector (orchestrators `runPipeline`, `runPipelineX2`,
+  `runPipelineX4`, native parallel LOOP `MAX-THREADS`).
 
-## Lancer la démo
+## Running the demo
 
 ```bash
-# 1. base (si le conteneur est arrêté)
+# 1. database (if the container is stopped)
 docker start stardemo-db
-# 2. Integration Server (≈ 40 s)
+# 2. Integration Server (about 40 s)
 /home/cpo/wm12/IntegrationServer/instances/default/bin/startup.sh
 # 3. UI
 xdg-open http://localhost:5555/StarSchemaETL/index.html      # login Administrator / manage
 ```
 
-Dans l'UI :
+In the UI:
 
-- **▶ Lancer la démo** : planifie le pipeline (taille de lot 10 000 / 20 000 / 50 000 lignes, 1 / 2 / 4 lots en
-  parallèle) ; refusé si un pipeline tourne déjà.
-  Les compteurs, le schéma en étoile, le journal, le débit, les « prochaines lignes source » et les
-  « dernières lignes chargées » se rafraîchissent toutes les 1,5 s ; le CA par mois se construit en direct.
-- **■ Arrêter** : le pipeline s'arrête proprement (statut STOPPED) : les lots restants sont sautés, les lots en
-  cours se terminent et sont commités (fonctionne aussi avec 2 ou 4 lots en parallèle).
-- **↺ Réinitialiser** : vide le schéma en étoile et le journal (`dwh.reset_demo()`) pour repartir de zéro ;
-  si un pipeline tourne, il est d'abord arrêté.
+- **▶ Start the demo**: schedules the pipeline (batch size 10,000 / 20,000 / 50,000 rows, 1 / 2 / 4 batches in
+  parallel); refused if a pipeline is already running.
+  Counters, star schema, log, throughput, "next source rows" and "last rows loaded" refresh every 1.5 s;
+  the revenue by month builds up live.
+- **■ Stop**: the pipeline stops cleanly (status STOPPED): remaining batches are skipped, batches in progress
+  finish and are committed (also works with 2 or 4 batches in parallel).
+- **↺ Reset**: empties the star schema and the log (`dwh.reset_demo()`) to start over; if a pipeline is
+  running, it is stopped first.
 
-Contrôles utiles côté base (`docker exec -it stardemo-db psql -U stardemo`) :
+Useful checks on the database side (`docker exec -it stardemo-db psql -U stardemo`):
 
 ```sql
-SELECT * FROM dwh.v_etl_last_run;      -- journal de la dernière exécution
-SELECT * FROM dwh.v_reconciliation;    -- lignes et montants source vs faits
+SELECT * FROM dwh.v_etl_last_run;      -- log of the last run
+SELECT * FROM dwh.v_reconciliation;    -- rows and amounts, source vs facts
 ```
 
-## Redéployer / reconstruire
+## Redeploy / rebuild
 
 ```bash
-./deploy.sh        # tout : conteneur + schéma, données (~10 s), package IS, UI
-./deploy.sh data   # régénérer le jeu de données
-./deploy.sh is     # package : connexions, services adaptateur, flows, UI
-python3 wm/test_steps.py   # tests unitaires des étapes (vide puis charge un lot de 5 000 lignes)
+./deploy.sh        # everything: container + schema, data (about 10 s), IS package, UI
+./deploy.sh data   # regenerate the data set
+./deploy.sh is     # package: connections, adapter services, flows, UI
+python3 wm/test_steps.py   # unit tests of the steps (truncate, then load one 5,000-row batch)
 ```
 
-Les scripts pilotent l'IS via le serveur MCP `webmethods-is` (wm-mcp-server, binaire indiqué par `WM_MCP_BIN`),
-soit par Claude Code (`.mcp.json`, modèle dans `.mcp.json.example`), soit en ligne de commande avec `wm/mcpcli.py`
-(JSON-RPC stdio). Prérequis : Docker, Python 3 (Playwright et ffmpeg pour la vidéo), un Integration Server 12.1 avec
-l'adaptateur JDBC et le driver PostgreSQL.
+The scripts drive the IS through the `webmethods-is` MCP server (wm-mcp-server, binary given by `WM_MCP_BIN`),
+either from Claude Code (`.mcp.json`, template in `.mcp.json.example`) or from the command line with `wm/mcpcli.py`
+(stdio JSON-RPC). Prerequisites: Docker, Python 3 (Playwright and ffmpeg for the video), an Integration Server 12.1
+with the JDBC adapter and the PostgreSQL driver.
 
-## Chiffres de référence (mesurés le 2026-09-08, WSL2, 16 vCPU, IS Xmx 1 Go)
+## Reference figures (measured on 2026-09-08, WSL2, 16 vCPU, IS Xmx 1 GB)
 
-| Étape | Lignes | Durée |
+| Step | Rows | Duration |
 |---|---|---|
-| Dimension temporelle (calculée en flow) | 1 096 | 0,4 s |
-| Dimensions client / commercial / produit | 5 000 / 143 / 2 000 | 0,4 s / 0,2 s / 0,3 s |
-| Table de faits, 50 lots de 20 000 lignes, 1 lot à la fois | 999 343 | 1 min 57 s (≈ 2,3 s par lot, ≈ 8 700 lignes/s) |
-| Table de faits, 50 lots de 20 000 lignes, 4 lots en parallèle | 999 343 | 48 s (≈ 3,2 s par lot, ≈ 21 000 lignes/s) |
-| Réconciliation `dwh.v_reconciliation` | 999 343 = 999 343 | montant 2 993 009 298,57 € identique |
+| Time dimension (computed in the flow) | 1,096 | 0.4 s |
+| Customer / sales rep / product dimensions | 5,000 / 143 / 2,000 | 0.4 s / 0.2 s / 0.3 s |
+| Fact table, 50 batches of 20,000 rows, 1 batch at a time | 999,343 | 1 min 57 s (about 2.3 s per batch, about 8,700 rows/s) |
+| Fact table, 50 batches of 20,000 rows, 4 batches in parallel | 999,343 | 48 s (about 3.2 s per batch, about 21,000 rows/s) |
+| Reconciliation `dwh.v_reconciliation` | 999,343 = 999,343 | amount 2,993,009,298.57 € identical |
 
-Chaque lot est un sous-flux indépendant (transaction commitée), très en deçà de l'objectif de 5 minutes par sous-flux.
+Each batch is an independent sub-flow (committed transaction), far below the 5-minute target per sub-flow.
 
-## Version anglaise (vidéo publique)
+## French version
 
-- UI : `http://localhost:5555/StarSchemaETL/index.html?lang=en` (textes, formats de nombres, statuts) ; page des flows
-  `flows-en.html` (commentaires traduits par `wm/flowdoc.py --lang en`).
-- Dimension temporelle : `star.api:start` transmet `lang` ; en anglais le flow `loadDates` utilise la locale `en_GB` (semaines ISO)
-  (`Monday`, `September`) et les libellés `2025-Q3` / `2025-W37` (français : `fr_FR`, `2025-T3` / `2025-S37`).
-- Jeu de données : `./deploy.sh data-en` (catégories, produits et segments en anglais, mêmes volumes) ;
-  `./deploy.sh data` pour revenir au jeu français.
-- Vidéo : `python3 video/record_demo.py --lang en` (cadre 1920×1200, page dézoomée à 80 %, cartes `*-en.html`),
-  puis `make_video.py`, `chapters.py`, `make_thumbnail.py` (fichiers `ipaas-etl-star-schema-demo-en*.mp4`, `thumbnail-en.png`).
+- UI: `http://localhost:5555/StarSchemaETL/index.html?lang=fr` (texts, number formats, statuses).
+- Time dimension: `star.api:start` passes `lang`; in French the `loadDates` flow uses the `fr_FR` locale
+  (`lundi`, `septembre`) and the labels `2025-T3` / `2025-S37` (English: `en_GB`, ISO weeks, `2025-Q3` / `2025-W37`).
+- Data set: `./deploy.sh data-fr` (categories, products and segments in French, same volumes);
+  `./deploy.sh data` to return to the English data set.
+- Video: `python3 video/record_demo.py --lang fr` (French cards `*-fr.html`), then `make_video.py`, `chapters.py`,
+  `make_thumbnail.py` (files `ipaas-etl-star-schema-demo-fr*.mp4`, `thumbnail-fr.png`).
 
-## Neutralité des noms
+## Name neutrality
 
-Le package IS s'appelle `StarSchemaETL` (namespace `star.*`), la base `stardemo` ; écrans, cartes de titre, vignette,
-post et ce dépôt ne citent aucun nom d'entreprise (ni client, ni éditeur d'ETL, ni ERP).
+The IS package is called `StarSchemaETL` (namespace `star.*`), the database `stardemo`; screens, title cards,
+thumbnail, post and this repository do not name any company (no customer, no ETL vendor, no ERP).
 
-## Vidéo et communication
+## Video and communication
 
-- `video/record_demo.py` enregistre la démo avec Playwright (cartes de titre `video/cards/`, sous-titres, deux
-  exécutions : séquentielle puis 4 lots en parallèle) ; `video/make_video.py` produit `video/ipaas-etl-star-schema-demo.mp4` (les vidéos ne sont pas versionnées)
-  (temps réel, 5 min 54 s) et `video/ipaas-etl-star-schema-demo-condensee.mp4` (attentes accélérées, 4 min 23 s) ;
-  `video/chapters.py`, `video/make_thumbnail.py` et `video/frames.py` produisent chapitres, vignette et images de contrôle.
-  Prise du 2026-09-08 : 2 min 33 s (1 lot) et 1 min 10 s (4 lots) — l'encodage vidéo sur la même machine ralentit
-  les chargements d'environ 30 % par rapport aux mesures sans capture (1 min 57 s / 49 s). Enregistrer sur une
-  machine au repos (aucune compilation ni autre charge en parallèle).
-- `docs/linkedin-post.md` : texte du post LinkedIn (EN/FR), fiche YouTube, vignette `video/thumbnail.png`.
-- `docs/wm-mcp-server-feedback-poc-etl.md` : retour d'expérience transmis à l'équipe wm-mcp-server.
+- `video/record_demo.py` records the demo with Playwright (title cards in `video/cards/`, captions, two runs:
+  sequential then 4 batches in parallel); `video/make_video.py` produces `video/ipaas-etl-star-schema-demo.mp4`
+  (videos are not versioned) in real time (5 min 54 s) and a condensed version (waits sped up, 4 min 23 s);
+  `video/chapters.py`, `video/make_thumbnail.py` and `video/frames.py` produce chapters, thumbnail and control frames.
+  Take of 2026-09-08: 2 min 33 s (1 batch) and 1 min 10 s (4 batches). Video encoding on the same machine slows
+  the loads by about 30 % compared with the measurements without capture (1 min 57 s / 49 s). Record on an idle
+  machine (no compilation or other load in parallel).
+- `docs/linkedin-post.md`: LinkedIn post text, YouTube sheet, thumbnail `video/thumbnail.png`.
 
-## Ordre de grandeur
+## Order of magnitude
 
-La table source (999 343 lignes, 245 Mo) vaut deux fois une table de staging moyenne d'un ERP de taille
-intermédiaire. Avec les débits mesurés sans capture d'écran (8 700 lignes/s ≈ 1,9 Mo/s en séquentiel, 20 000 lignes/s
-≈ 4,6 Mo/s à 4 lots), une table de 1 Go se charge en 9 min / 3,7 min, avant tout parallélisme entre tables
-(scheduler) et en rechargement complet, alors qu'un ETL de ce type travaille en delta. Pour une démo à cette échelle :
-1 000 000 de commandes dans `db/02_generate_data.sql` (≈ 4 M de lignes, ≈ 1 Go).
+The source table (999,343 rows, 245 MB) is twice the average staging table of a mid-sized ERP. With the
+throughput measured without screen capture (8,700 rows/s, about 1.9 MB/s sequential; 20,000 rows/s, about 4.6 MB/s
+with 4 batches), a 1 GB table loads in 9 min / 3.7 min, before any parallelism between tables (scheduler) and
+as a full reload, whereas an ETL of this kind works in delta mode. For a demo at that scale: 1,000,000 orders
+in `db/02_generate_data.sql` (about 4 M rows, about 1 GB).
 
-## Points d'attention
+## Points of attention
 
-- Montage vidéo : `video/make_video.py` encode segment par segment (pic RAM ≈ 3,7 Go). Ne pas revenir à un
-  `filter_complex` multi-`trim` sur la même entrée : il met la vidéo entière en mémoire et a saturé la machine.
-- Après un redémarrage de WSL, le conteneur `stardemo-db` repart seul mais l'IS doit être relancé (`startup.sh`).
-- Le service `star.api:status` agrège 5 requêtes (dont le CA par mois sur toute la table de faits) : coût
-  faible sur 1 M de lignes, à surveiller si le volume est multiplié.
-- La taille de lot borne la mémoire de l'IS (20 000 lignes ≈ quelques dizaines de Mo dans le pipeline) ; le
-  Xmx de l'instance est de 1 Go (`configuration/custom_wrapper.conf`).
-- Les timestamps du journal sont ceux de l'IS (base en Europe/Paris) ; les durées sont mesurées par le flow.
+- Video editing: `video/make_video.py` encodes segment by segment (peak RAM about 3.7 GB). Do not go back to a
+  multi-`trim` `filter_complex` on the same input: it keeps the whole video in memory and saturated the machine.
+- After a WSL restart, the `stardemo-db` container comes back on its own but the IS has to be restarted (`startup.sh`).
+- The `star.api:status` service aggregates 5 queries (including revenue by month over the whole fact table):
+  cheap on 1 M rows, to be watched if the volume is multiplied.
+- The batch size bounds the IS memory (20,000 rows is a few tens of MB in the pipeline); the instance Xmx is
+  1 GB (`configuration/custom_wrapper.conf`).
+- Log timestamps are the IS ones (database in Europe/Paris); durations are measured by the flow.

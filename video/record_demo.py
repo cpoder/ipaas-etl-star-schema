@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Enregistre la vidéo de démonstration (Playwright + Chromium) : cartes de titre, UI réelle, sous-titres.
+"""Records the demo video (Playwright + Chromium): title cards, the real UI, captions.
 
-Sortie : video/out/ipaas-etl-star-schema-demo.webm + marques de temps (marks.json) pour le montage ffmpeg (make_video.sh).
-Usage : python3 record_demo.py [--fast]   (--fast : lots de 50 000 et parallélisme 4 dès le premier run, pour tester)
+Output: video/out/ipaas-etl-star-schema-demo.webm + time marks (marks.json) for the ffmpeg editing (make_video.py).
+Usage: python3 record_demo.py [--fast] [--lang fr]
+  --fast     batches of 50,000 rows and 4 parallel batches from the first run (for testing)
+  --lang fr  French captions, French title cards (*-fr.html) and French UI (?lang=fr); English by default
 """
 import json, os, sys, time
 from playwright.sync_api import sync_playwright
@@ -12,13 +14,13 @@ CARDS = os.path.join(HERE, "cards")
 OUT = os.path.join(HERE, "out")
 os.makedirs(OUT, exist_ok=True)
 URL = "http://localhost:5555/StarSchemaETL/"
-W, H = 1920, 1200          # cadre vidéo
-ZOOM = 0.8                 # page dézoomée : tout l'écran visible sans défilement
+W, H = 1920, 1200          # video frame
+ZOOM = 0.8                 # page zoomed out: the whole screen visible without scrolling
 FAST = "--fast" in sys.argv
-LANG = "en" if "--lang" in sys.argv and sys.argv[sys.argv.index("--lang") + 1] == "en" else "fr"
-SUF = "-en" if LANG == "en" else ""
-Q = "?lang=en" if LANG == "en" else ""
-C = {  # sous-titres
+LANG = "fr" if "--lang" in sys.argv and sys.argv[sys.argv.index("--lang") + 1] == "fr" else "en"
+SUF = "-fr" if LANG == "fr" else ""
+Q = "?lang=fr" if LANG == "fr" else ""
+C = {  # captions: (French, English)
  "start": ("Situation de départ : 999 343 lignes de commandes dans staging.orders, schéma en étoile vide", "Starting point: 999,343 order lines in staging.orders, an empty star schema"),
  "flat": ("Une seule table « classique » : commande, client, commercial, produit, quantité, prix unitaire", "A single flat table: order, customer, sales rep, product, quantity, unit price"),
  "flows": ("Les flow services du package StarSchemaETL, tels que déployés sur l'Integration Server", "The flow services of the StarSchemaETL package, exactly as deployed on the Integration Server"),
@@ -100,25 +102,25 @@ def main():
                                   http_credentials={"username": "Administrator", "password": "manage"}, device_scale_factor=1)
         page = ctx.new_page(); page.on("dialog", lambda d: d.accept())
         r = Recorder(page)
-        # ---- 1. cartes d'introduction
+        # ---- 1. title cards
         r.mark("intro"); r.card("intro", 9)
         r.mark("mapping"); r.card("flows", 10)
-        # ---- 2. situation de départ
+        # ---- 2. starting point
         r.goto(URL + "index.html" + Q); r.wait(3)
-        assert "INJOIGNABLE" not in r.pill() and "UNREACHABLE" not in r.pill(), "l'UI ne joint pas l'IS : " + r.pill()
+        assert "INJOIGNABLE" not in r.pill() and "UNREACHABLE" not in r.pill(), "the UI cannot reach the IS: " + r.pill()
         r.mark("ui_start")
         r.caption(cap("start"), 1); r.hilite(".kpi:first-child, #star"); r.wait(6)
         r.caption(cap("flat"), 1); r.hilite("#src"); r.wait(6)
-        # ---- 3. les flows
+        # ---- 3. the flows
         r.mark("flows_page")
-        r.goto(URL + ("flows-en.html" if LANG == "en" else "flows.html")); r.wait(1)
+        r.goto(URL + "flows.html"); r.wait(1)
         r.caption(cap("flows"), 5)
         r.caption(cap("orch"), 1); r.scroll(120); r.wait(6)
         r.caption(cap("chunk"), 1)
         page.locator("#star\\.etl\\.steps\\:loadFactChunk").scroll_into_view_if_needed(); r.wait(7)
         r.caption(cap("dates"), 1)
         page.locator("#star\\.etl\\.steps\\:loadDates").scroll_into_view_if_needed(); r.wait(6)
-        # ---- 4. lancement séquentiel
+        # ---- 4. sequential run
         r.goto(URL + "index.html" + Q); r.wait(2.5)
         page.select_option("#chunk", "50000" if FAST else "20000"); page.select_option("#threads", "4" if FAST else "1")
         r.caption(cap("launch"), 1); r.hilite("#btnStart"); r.wait(2)
@@ -141,7 +143,7 @@ def main():
         st = r.wait_pill(("DONE", "FAILED", "STOPPED"), 240); r.mark("run1_done"); r.wait(1.5)
         t1 = r.elapsed_text()
         r.caption(cap("done1", t=t1), 1); r.hilite(".kpi:nth-child(2), .kpi:nth-child(5)"); r.wait(8)
-        # ---- 5. réinitialisation puis parallélisme
+        # ---- 5. reset, then parallelism
         r.caption(cap("reset"), 1); page.click("#btnReset"); r.wait(4)
         r.mark("reset_done")
         page.select_option("#threads", "4"); page.select_option("#chunk", "20000")
@@ -154,7 +156,7 @@ def main():
         r.caption(cap("done2", t1=t1, t4=t4), 1); r.hilite(".kpi:nth-child(4)"); r.wait(8)
         r.scroll(700); r.caption(cap("analysis"), 1); page.select_option("#axis", "anSalesrep"); r.hilite("#an"); r.wait(5)
         r.caption("", 0); r.wait(0.5)
-        # ---- 6. bilan
+        # ---- 6. wrap-up
         r.mark("outro"); r.card("outro", 12, fill=({"t1": f"1 batch at a time: {t1}", "t4": f"4 parallel batches: {t4}"} if LANG == "en" else {"t1": f"1 lot à la fois : {t1}", "t4": f"4 lots en parallèle : {t4}"}))
         r.mark("end")
         video = page.video; ctx.close()

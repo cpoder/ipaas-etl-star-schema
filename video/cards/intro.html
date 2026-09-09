@@ -1,12 +1,12 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"></head><body>
-<div class="kicker">Proof of concept · un iPaaS à la place de l'ETL</div>
-<h1>webMethods Integration Server<br>à la place de l'ETL, <span>sur un schéma en étoile</span></h1>
-<p class="sub">Une table de commandes « classique » (client, commercial, produit, quantité, prix unitaire, un million de lignes) transformée en table de faits et dimensions, avec journalisation, transactions et pilotage en temps réel.</p>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"></head><body>
+<div class="kicker">Proof of concept · an iPaaS instead of the ETL</div>
+<h1>webMethods Integration Server<br>as the ETL, <span>on a star schema</span></h1>
+<p class="sub">A flat, classic order table (customer, sales rep, product, quantity, unit price, one million lines) turned into a fact table and dimensions, with logging, transactions and real-time monitoring.</p>
 <ul>
-  <li>Source : staging.orders — 999 343 lignes, 245 Mo (réplication type Data Lake d'un ERP)</li>
-  <li>Cible : fact_sales + dim_date, dim_customer, dim_salesrep, dim_product</li>
-  <li>Moteur : flow services + adaptateur JDBC, sous-flux transactionnels &lt; 5 min</li>
-  <li>Construit et déployé par API (serveur MCP webmethods-is), PostgreSQL 16</li>
+  <li>Source: staging.orders — 999,343 rows, 245 MB (Data Lake style replication of an ERP)</li>
+  <li>Target: fact_sales + dim_date, dim_customer, dim_salesrep, dim_product</li>
+  <li>Engine: flow services + JDBC adapter, transactional sub-flows &lt; 5 min</li>
+  <li>Built and deployed through an API (webmethods-is MCP server), PostgreSQL 16</li>
 </ul>
-<div class="foot"><span>IBM webMethods Integration Server 12.1 · package StarSchemaETL</span><span>septembre 2026</span></div>
+<div class="foot"><span>IBM webMethods Integration Server 12.1 · StarSchemaETL package</span><span>September 2026</span></div>
 </body></html>

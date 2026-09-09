@@ -1,7 +1,9 @@
 -- =====================================================================
---  Génération d'un jeu de données de démo : ~1 000 000 lignes de commandes
---  (250 000 commandes de 1 à 7 lignes, 5 000 clients, 144 commerciaux,
---   2 000 produits, 3 ans de dates). Reproductible (setseed).
+--  Demo data set generation: ~1,000,000 order lines
+--  (250,000 orders of 1 to 7 lines, 5,000 customers, 144 sales reps,
+--   2,000 products, 3 years of dates). Reproducible (setseed).
+--  French cities, regions and person names; English labels for segments,
+--  categories and products (02_generate_data_fr.sql: French labels).
 -- =====================================================================
 \timing on
 SET synchronous_commit = off;
@@ -9,7 +11,7 @@ SELECT setseed(0.4242);
 
 TRUNCATE staging.orders;
 
--- Villes (ville, département, région)
+-- Cities (city, department, region)
 CREATE TEMP TABLE gen_city (id serial PRIMARY KEY, city text, dept text, region text);
 INSERT INTO gen_city(city, dept, region) VALUES
 ('Loudéac','22','Bretagne'),('Saint-Brieuc','22','Bretagne'),('Lannion','22','Bretagne'),('Dinan','22','Bretagne'),('Guingamp','22','Bretagne'),
@@ -33,7 +35,7 @@ INSERT INTO gen_city(city, dept, region) VALUES
 ('Carcassonne','11','Occitanie'),('Perpignan','66','Occitanie'),('Montpellier','34','Occitanie'),('Nîmes','30','Occitanie'),('Avignon','84','Provence-Alpes-Côte d Azur'),
 ('Marseille','13','Provence-Alpes-Côte d Azur'),('Gap','05','Provence-Alpes-Côte d Azur'),('Digne-les-Bains','04','Provence-Alpes-Côte d Azur'),('Nice','06','Provence-Alpes-Côte d Azur'),('Melun','77','Île-de-France');
 
--- Clients : 5 000 exploitations
+-- Customers: 5,000 farms
 CREATE TEMP TABLE gen_customer AS
 WITH base AS (
     SELECT i,
@@ -46,17 +48,17 @@ WITH base AS (
     FROM generate_series(1, 5000) i)
 SELECT b.i AS id,
        'C' || lpad(b.i::text, 6, '0') AS code,
-       (ARRAY['EARL','GAEC','SCEA','SARL','Ferme','Domaine','EARL de','GAEC de','SCEA du','Ferme de'])[b.f_idx+1]
+       (ARRAY['EARL','GAEC','SCEA','SARL','Farm','Estate','EARL','GAEC','SCEA','Farm'])[b.f_idx+1]
        || ' ' ||
        CASE WHEN b.r < 0.5
             THEN (ARRAY['Le Goff','Le Roux','Tanguy','Le Gall','Guillou','Morvan','Riou','Le Bras','Hamon','Jaouen','Martin','Bernard','Dubois','Thomas','Robert','Richard','Petit','Durand','Leroy','Moreau','Simon','Laurent','Lefebvre','Michel','Garcia','David','Bertrand','Roux','Vincent','Fournier','Morel','Girard','André','Mercier','Dupont','Lambert','Bonnet','François','Martinez','Legrand','Garnier','Faure','Rousseau','Blanc','Guérin','Muller','Henry','Roussel','Nicolas','Perrin'])[b.s_idx+1]
             ELSE (ARRAY['Kerguelen','Kerbiquet','La Ville Neuve','Les Landes','Le Bourg','La Croix','Kervran','Le Clos','Les Rouges Terres','La Grande Métairie','Kerlouan','Le Moulin','Beaulieu','La Haute Folie','Kerandraon','Le Pont Neuf','Les Fontaines','Kerdaniel','Le Verger','La Chesnaie'])[b.l_idx+1]
        END || ' - ' || c.city AS name,
        c.city, c.dept, c.region,
-       (ARRAY['Éleveur bovin lait','Éleveur bovin viande','Éleveur porcin','Aviculteur','Grandes cultures','Maraîcher','Viticulteur','Éleveur ovin-caprin','Particulier'])[b.seg_idx+1] AS segment
+       (ARRAY['Dairy cattle farmer','Beef cattle farmer','Pig farmer','Poultry farmer','Arable farmer','Market gardener','Winegrower','Sheep and goat farmer','Private customer'])[b.seg_idx+1] AS segment
 FROM base b JOIN gen_city c ON c.id = b.city_id;
 
--- Commerciaux : 12 par région
+-- Sales reps: 12 per region
 CREATE TEMP TABLE gen_rep AS
 WITH reg AS (SELECT region, row_number() OVER (ORDER BY region) AS region_idx FROM (SELECT DISTINCT region FROM gen_city) x),
      base AS (SELECT r.region, r.region_idx, k, floor(random()*24)::int AS fn_idx, floor(random()*50)::int AS s_idx
@@ -69,31 +71,31 @@ SELECT row_number() OVER (ORDER BY region_idx, k) AS id,
        region, k
 FROM base;
 
--- Catégories de produits (fournitures agricoles) avec noms de base et fourchettes de prix
+-- Product categories (farm supplies) with base names and price ranges
 CREATE TEMP TABLE gen_cat (id serial PRIMARY KEY, category text, names text[], pmin numeric, pmax numeric);
 INSERT INTO gen_cat(category, names, pmin, pmax) VALUES
-('Alimentation animale',    ARRAY['Aliment vaches laitières 25 kg','Aliment veaux 25 kg','Granulés porcs croissance 25 kg','Aliment poules pondeuses 20 kg','Mash volailles 25 kg','Foin de luzerne 300 kg','Bloc à lécher 10 kg','Concentré ovins 25 kg'], 8, 60),
-('Hygiène et santé animale', ARRAY['Désinfectant bâtiment 20 L','Vermifuge bovins 1 L','Produit de trempage trayons 20 L','Complément minéral 25 kg','Spray onglons 500 mL','Lingettes de trayon x1000','Insecticide bâtiment 5 L'], 15, 180),
-('Élevage et bâtiment',      ARRAY['Abreuvoir à niveau constant','Râtelier galvanisé','Cornadis 6 places','Tapis logette caoutchouc','Barrière galvanisée 4 m','Nourrisseur porcelets','Lampe chauffante IR 250 W','Ventilateur bâtiment 50 cm'], 30, 1500),
-('Clôture',                  ARRAY['Électrificateur 12 V','Piquet fibre de verre x50','Fil de clôture 400 m','Isolateur annulaire x100','Poignée de porte électrique','Ruban de clôture 200 m','Batterie 12 V 100 Ah'], 5, 400),
-('Semences et cultures',     ARRAY['Semence maïs 50 000 grains','Ray-grass anglais 25 kg','Trèfle violet 10 kg','Blé tendre semence 25 kg','Engrais NPK 15-15-15 50 kg','Bâche ensilage 12 x 50 m','Filet balles rondes 3000 m','Film enrubannage 750 mm'], 20, 350),
-('Équipement et outillage',  ARRAY['Pulvérisateur à dos 16 L','Tronçonneuse thermique 45 cm','Débroussailleuse 42 cc','Nettoyeur haute pression 150 bar','Pompe à eau thermique','Groupe électrogène 5 kVA','Brouette 100 L','Compresseur 50 L'], 40, 2500),
-('Vêtements et EPI',         ARRAY['Bottes agricoles','Combinaison de travail','Gants de traite x100','Veste de pluie','Pantalon multipoches','Chaussures de sécurité S3','Cotte à bretelles'], 5, 120),
-('Jardin et espaces verts',  ARRAY['Tondeuse thermique 51 cm','Terreau universel 70 L','Tuyau arrosage 50 m','Gazon rustique 5 kg','Sécateur pro','Serre tunnel 6 m2','Taille-haie électrique'], 8, 900);
+('Animal feed',               ARRAY['Dairy cow feed 25 kg','Calf feed 25 kg','Pig grower pellets 25 kg','Layer hen feed 20 kg','Poultry mash 25 kg','Alfalfa hay 300 kg','Mineral lick block 10 kg','Sheep concentrate 25 kg'], 8, 60),
+('Animal hygiene and health', ARRAY['Barn disinfectant 20 L','Cattle dewormer 1 L','Teat dip 20 L','Mineral supplement 25 kg','Hoof spray 500 mL','Teat wipes x1000','Barn insecticide 5 L'], 15, 180),
+('Livestock and buildings',   ARRAY['Constant-level water trough','Galvanized hay rack','6-place feed barrier','Rubber cubicle mat','Galvanized gate 4 m','Piglet feeder','Infrared heat lamp 250 W','Barn fan 50 cm'], 30, 1500),
+('Fencing',                   ARRAY['Fence energizer 12 V','Fiberglass posts x50','Fence wire 400 m','Ring insulators x100','Electric gate handle','Fence tape 200 m','Battery 12 V 100 Ah'], 5, 400),
+('Seeds and crops',           ARRAY['Maize seed 50,000 kernels','Perennial ryegrass 25 kg','Red clover 10 kg','Wheat seed 25 kg','NPK fertilizer 15-15-15 50 kg','Silage sheet 12 x 50 m','Round bale net 3000 m','Bale wrap film 750 mm'], 20, 350),
+('Equipment and tools',       ARRAY['Backpack sprayer 16 L','Petrol chainsaw 45 cm','Brushcutter 42 cc','Pressure washer 150 bar','Petrol water pump','Generator 5 kVA','Wheelbarrow 100 L','Compressor 50 L'], 40, 2500),
+('Workwear and PPE',          ARRAY['Farm boots','Work overalls','Milking gloves x100','Rain jacket','Multi-pocket trousers','Safety shoes S3','Bib overalls'], 5, 120),
+('Garden and green spaces',   ARRAY['Petrol lawnmower 51 cm','Potting soil 70 L','Garden hose 50 m','Hard-wearing lawn seed 5 kg','Pro pruning shears','Tunnel greenhouse 6 m2','Electric hedge trimmer'], 8, 900);
 
--- Produits : 2 000 références
+-- Products: 2,000 references
 CREATE TEMP TABLE gen_product AS
 WITH base AS (SELECT i, 1 + ((i-1) % 8) AS cat_id, random() AS r1, random() AS r2, random() AS r3, random() AS r4
               FROM generate_series(1, 2000) i)
 SELECT b.i AS id,
        'P' || lpad(b.i::text, 6, '0') AS code,
-       (ARRAY['','','Premium ','Éco ','Pro '])[1 + floor(b.r1*5)::int] || c.names[1 + floor(b.r2*array_length(c.names,1))::int] AS name,
+       (ARRAY['','','Premium ','Eco ','Pro '])[1 + floor(b.r1*5)::int] || c.names[1 + floor(b.r2*array_length(c.names,1))::int] AS name,
        c.category,
        (ARRAY['Vital Concept','Bio Armor','AgriNova','Lacme','Gallagher','Stihl','Husqvarna','Kärcher','La Buvette','Suevia','Patura','Zoetis','Elanco','MSD','Novatech','Lallemand','KWS','Pioneer','Yara','Timac Agro','Aigle','Le Chameau','Delta Plus','Portwest'])[1 + floor(b.r3*24)::int] AS brand,
        round((c.pmin + b.r4*(c.pmax - c.pmin))::numeric, 2) AS price
 FROM base b JOIN gen_cat c ON c.id = b.cat_id;
 
--- Commandes : 250 000 entêtes de 1 à 7 lignes sur 3 ans (2023-2025)
+-- Orders: 250,000 headers of 1 to 7 lines over 3 years (2023-2025)
 CREATE TEMP TABLE gen_order AS
 SELECT o AS order_no,
        1 + floor(random()*5000)::int AS cust_id,
@@ -101,7 +103,7 @@ SELECT o AS order_no,
        1 + floor(random()*7)::int AS n_lines
 FROM generate_series(1, 250000) o;
 
--- Lignes de commandes → table source dénormalisée
+-- Order lines -> denormalized source table
 INSERT INTO staging.orders (order_line_id, order_id, order_date,
         customer_code, customer_name, customer_city, customer_dept, customer_segment,
         salesrep_code, salesrep_name, salesrep_region,
@@ -126,8 +128,8 @@ JOIN gen_product  p ON p.id = l.prod_id;
 
 ANALYZE staging.orders;
 
-SELECT count(*) AS lignes, count(DISTINCT order_id) AS commandes, count(DISTINCT customer_code) AS clients,
-       count(DISTINCT salesrep_code) AS commerciaux, count(DISTINCT product_code) AS produits,
-       count(DISTINCT order_date) AS jours, min(order_date), max(order_date),
-       pg_size_pretty(pg_total_relation_size('staging.orders')) AS taille
+SELECT count(*) AS rows, count(DISTINCT order_id) AS orders, count(DISTINCT customer_code) AS customers,
+       count(DISTINCT salesrep_code) AS salesreps, count(DISTINCT product_code) AS products,
+       count(DISTINCT order_date) AS days, min(order_date), max(order_date),
+       pg_size_pretty(pg_total_relation_size('staging.orders')) AS size
 FROM staging.orders;

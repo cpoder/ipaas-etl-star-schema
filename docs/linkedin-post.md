@@ -1,4 +1,4 @@
-# LinkedIn post + YouTube sheet (English)
+# LinkedIn post + YouTube sheet
 
 ## LinkedIn post
 
@@ -47,9 +47,9 @@ Chapters:
 
 **Tags**: webMethods, iPaaS, ETL, data integration, star schema, data warehouse, IBM, PostgreSQL, JDBC, integration server, flow services, ETL modernization
 
-**Files**: `video/ipaas-etl-star-schema-demo-en-condensee.mp4` (condensed, waits sped up, chapters above) or `video/ipaas-etl-star-schema-demo-en.mp4` (real time, chapters: 00:00, 00:09, 00:22, 00:36, 01:11, 01:48, 04:18, 04:34, 05:57, 06:15); thumbnail `video/thumbnail-en.png` (1280×720).
+**Files**: the condensed MP4 produced by `video/make_video.py` (waits sped up, chapters above) or `video/ipaas-etl-star-schema-demo.mp4` (real time, chapters: 00:00, 00:09, 00:22, 00:36, 01:11, 01:48, 04:18, 04:34, 05:57, 06:15); thumbnail `video/thumbnail.png` (1280×720). Videos are not versioned in this repository: `python3 video/record_demo.py` then `python3 video/make_video.py` regenerate them.
 
 ## Publishing
 
-1. YouTube Studio → Create → Upload the condensed MP4, thumbnail `thumbnail-en.png`, visibility Unlisted or Public, chapters in the description.
+1. YouTube Studio → Create → Upload the condensed MP4, thumbnail `thumbnail.png`, visibility Unlisted or Public, chapters in the description.
 2. LinkedIn: paste the post, replace `<YouTube link>`. A natively attached MP4 (under 10 min) usually gets more reach than a link, so consider both: native video in the post, YouTube link in a comment.

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Montage ffmpeg économe en mémoire : out/<base>.webm -> <base>.mp4 (temps réel) et <base>-condensee.mp4
-(attentes accélérées : run1 x4, run2 x2, mention à l'écran), à partir des marques de temps de record_demo.py.
-Chaque segment est encodé séparément (un seul décodage à la fois, pas de mise en tampon de l'entrée), puis les
-segments sont concaténés sans ré-encodage."""
+"""Memory-frugal ffmpeg editing: out/<base>.webm -> <base>.mp4 (real time) and <base>-condensed.mp4
+(waiting phases sped up: run1 x4, run2 x2, with an on-screen label), from the time marks of record_demo.py.
+Each segment is encoded separately (a single decode at a time, no buffering of the input), then the
+segments are concatenated without re-encoding."""
 import json, os, subprocess, glob, tempfile, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out")
 MJ = json.load(open(os.path.join(OUT, "marks.json")))
-BASE = "ipaas-etl-star-schema-demo" + ("-en" if MJ.get("lang") == "en" else "")
+FR = MJ.get("lang") == "fr"
+BASE = "ipaas-etl-star-schema-demo" + ("-fr" if FR else "")
 SRC = os.path.join(OUT, BASE + ".webm")
 marks = {m["name"]: m["t"] for m in MJ["marks"]}
 FONT = next(iter(glob.glob("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")), None)
 ENC = ["-c:v", "libx264", "-preset", "medium", "-crf", "22", "-pix_fmt", "yuv420p", "-r", "30", "-threads", "4"]
-LABEL = "sped up x{f}" if MJ.get("lang") == "en" else "accéléré x{f}"
+LABEL = "accéléré x{f}" if FR else "sped up x{f}"
 
 def duration(path):
     return float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path]).decode().strip())
@@ -21,12 +22,12 @@ def duration(path):
 def run(cmd):
     print(" ".join(cmd)[:220], flush=True); subprocess.check_call(cmd)
 
-# 1. version temps réel (un seul passage, pas de filtre)
+# 1. real-time version (a single pass, no filter)
 real = os.path.join(HERE, BASE + ".mp4")
 run(["ffmpeg", "-y", "-loglevel", "error", "-i", SRC] + ENC + ["-movflags", "+faststart", real])
 total = duration(real)
-print(f"temps réel : {total:.1f} s")
-# 2. version condensée : segments encodés un par un (-ss/-to avant -i : découpe à la lecture, mémoire constante)
+print(f"real time: {total:.1f} s")
+# 2. condensed version: segments encoded one by one (-ss/-to before -i: cut while reading, constant memory)
 cuts = [(0, marks["run1_wait_start"], 1), (marks["run1_wait_start"], marks["run1_done"], 4),
         (marks["run1_done"], marks["run2_wait_start"], 1), (marks["run2_wait_start"], marks["run2_done"], 2), (marks["run2_done"], total, 1)]
 tmp = tempfile.mkdtemp(prefix="montage-", dir=OUT)
@@ -43,9 +44,9 @@ try:
         parts.append(seg)
     lst = os.path.join(tmp, "list.txt")
     open(lst, "w").write("".join(f"file '{p}'\n" for p in parts))
-    cond = os.path.join(HERE, BASE + "-condensee.mp4")
+    cond = os.path.join(HERE, BASE + "-condensed.mp4")
     run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", "-movflags", "+faststart", cond])
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
-for f in (BASE + ".mp4", BASE + "-condensee.mp4"):
-    p = os.path.join(HERE, f); print(f"{f}: {duration(p):.0f} s, {os.path.getsize(p)/1e6:.1f} Mo")
+for f in (BASE + ".mp4", BASE + "-condensed.mp4"):
+    p = os.path.join(HERE, f); print(f"{f}: {duration(p):.0f} s, {os.path.getsize(p)/1e6:.1f} MB")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests unitaires des étapes ETL (invocation directe via MCP service_invoke)."""
+"""Unit tests of the ETL steps (direct invocation through MCP service_invoke)."""
 import json, sys, time, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcpcli import Mcp
@@ -49,7 +49,7 @@ inv("star.adapters:selectFactPreview", maxlen=500)
 inv("star.api:status", maxlen=300)
 inv("star.api:source", maxlen=300)
 inv("star.api:analyze", {"axis": "anRegion"}, maxlen=300)
-inv("star.api:analyze", {"axis": "bogus"}, maxlen=200, expect={"error": "axe inconnu"})
+inv("star.api:analyze", {"axis": "bogus"}, maxlen=200, expect={"error": "unknown axis"})
 inv("star.api:dimension", {"name": "product"}, maxlen=300)
 inv("star.api:reset", expect={"reset": "true"})
 m.close()

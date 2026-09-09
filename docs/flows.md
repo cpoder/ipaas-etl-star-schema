@@ -1,170 +1,171 @@
-# Les flows de la démo : comment les transformations sont réalisées
+# The demo flows: how the transformations are done
 
-Package Integration Server **StarSchemaETL** (namespace racine `star`). Tout est construit avec des briques
-standard de webMethods : flow services, services adaptateur JDBC, transactions ART, scheduler. L'arbre exact de
-chaque flow (tel que déployé) est dans `docs/flows-trees.md` et à l'écran sur
+Integration Server package **StarSchemaETL** (root namespace `star`). Everything is built with standard
+webMethods building blocks: flow services, JDBC adapter services, ART transactions, scheduler. The exact tree
+of each flow (as deployed) is in `docs/flows-trees.md` and on screen at
 `http://localhost:5555/StarSchemaETL/flows.html`.
 
-## 1. Vue d'ensemble
+## 1. Overview
 
 ```
-                          star.etl:startPipeline  (scheduler IS, +3 s)
+                          star.etl:startPipeline  (IS scheduler, +3 s)
                                      │
-                          star.etl:runPipeline / runPipelineX2 / runPipelineX4   (orchestrateur)
-   TRUNCATE_STAR ─► DIM_DATE ─► DIM_CUSTOMER ─► DIM_SALESREP ─► DIM_PRODUCT ─► plan de lots ─► LOOP (1, 2 ou 4 lots en parallèle)
+                          star.etl:runPipeline / runPipelineX2 / runPipelineX4   (orchestrator)
+   TRUNCATE_STAR ─► DIM_DATE ─► DIM_CUSTOMER ─► DIM_SALESREP ─► DIM_PRODUCT ─► batch plan ─► LOOP (1, 2 or 4 batches in parallel)
         │             │              │               │               │                              │
   truncateStar     loadDates     loadCustomers   loadSalesreps   loadProducts                 loadFactChunk (fromId, toId)
         └─────────────┴──────────────┴───────────────┴───────────────┴──────────────────────────────┘
-                                   chaque étape : beginStep → travail → logStep (dwh.etl_run_log)
+                                   each step: beginStep → work → logStep (dwh.etl_run_log)
 ```
 
-| Couche | Rôle | Services |
+| Layer | Role | Services |
 |---|---|---|
-| Orchestration | ordre des étapes, journal, arrêt, statut | `star.etl:runPipeline*`, `star.etl:startPipeline` |
-| Étapes (sous-flux) | une unité de travail transactionnelle par étape | `star.etl.steps:truncateStar`, `loadDates`, `loadCustomers`, `loadSalesreps`, `loadProducts`, `loadFactChunk` |
-| Journalisation | horodatage et durée par étape | `star.etl.steps:beginStep`, `star.etl.steps:logStep` |
-| Accès aux données | SQL d'extraction et de chargement | `star.adapters:*` (CustomSQL, BatchInsert) sur `star.connections:dwh` (transactionnelle) et `star.connections:dwhLog` (sans transaction) |
-| API de pilotage | JSON pour l'UI | `star.api:status`, `chart`, `start`, `stop`, `reset`, `analyze`, `dimension`, `source` |
+| Orchestration | step order, log, stop, status | `star.etl:runPipeline*`, `star.etl:startPipeline` |
+| Steps (sub-flows) | one transactional unit of work per step | `star.etl.steps:truncateStar`, `loadDates`, `loadCustomers`, `loadSalesreps`, `loadProducts`, `loadFactChunk` |
+| Logging | timestamp and duration per step | `star.etl.steps:beginStep`, `star.etl.steps:logStep` |
+| Data access | extraction and loading SQL | `star.adapters:*` (CustomSQL, BatchInsert) on `star.connections:dwh` (transactional) and `star.connections:dwhLog` (no transaction) |
+| Control API | JSON for the UI | `star.api:status`, `chart`, `start`, `stop`, `reset`, `analyze`, `dimension`, `source` |
 
-Deux connexions JDBC vers la même base, volontairement :
+Two JDBC connections to the same database, on purpose:
 
-- `dwh` en **LOCAL_TRANSACTION** : les chargements, avec des transactions explicites (`pub.art.transaction:startTransaction` / `commitTransaction` / `rollbackTransaction`) ;
-- `dwhLog` en **NO_TRANSACTION** : le journal, le drapeau d'arrêt et les requêtes de l'UI, pour que chaque ligne de journal soit visible dès qu'elle est écrite, même pendant une transaction de chargement.
+- `dwh` in **LOCAL_TRANSACTION**: the loads, with explicit transactions (`pub.art.transaction:startTransaction` / `commitTransaction` / `rollbackTransaction`);
+- `dwhLog` in **NO_TRANSACTION**: the log, the stop flag and the UI queries, so that every log row is visible as soon as it is written, even during a load transaction.
 
-## 2. Le patron d'une étape (sous-flux)
+## 2. The pattern of a step (sub-flow)
 
-Toutes les étapes suivent le même squelette, en TRY / CATCH :
+Every step follows the same skeleton, in TRY / CATCH:
 
 ```
 TRY
   pub.art.transaction:startTransaction        → txName
-  ... extraction (adaptateur CustomSQL) ...
+  ... extraction (CustomSQL adapter) ...
   ... transformation (MAP / LOOP / pub.*) ...
-  ... chargement (adaptateur BatchInsert) ...
-  pub.list:sizeOfList                          → rowCount (sortie de l'étape)
+  ... loading (BatchInsert adapter) ...
+  pub.list:sizeOfList                          → rowCount (step output)
   pub.art.transaction:commitTransaction
 CATCH
   pub.flow:getLastError                        → errorMsg
-  BRANCH txName : $null → rien ; sinon rollbackTransaction
-  EXIT $flow FAILURE « <étape> : %errorMsg% »
+  BRANCH txName : $null → nothing ; otherwise rollbackTransaction
+  EXIT $flow FAILURE "<step>: %errorMsg%"
 ```
 
-Ce qui est ainsi garanti : une étape est **atomique** (tout ou rien), **rejouable** (elle ne laisse pas de demi-lot),
-et **courte** (un lot de 20 000 lignes dure 2 à 3 s, très en dessous des 5 minutes exigées pour un sous-flux).
-L'orchestrateur ne touche jamais aux données lui-même : il enchaîne les étapes et journalise.
+What this guarantees: a step is **atomic** (all or nothing), **replayable** (it never leaves half a batch behind),
+and **short** (a 20,000-row batch takes 2 to 3 s, far below the 5 minutes required for a sub-flow).
+The orchestrator never touches the data itself: it chains the steps and logs them.
 
-## 3. Les transformations, étape par étape
+## 3. The transformations, step by step
 
-### 3.1 Dimensions simples — `loadCustomers`, `loadSalesreps`, `loadProducts`
+### 3.1 Simple dimensions: `loadCustomers`, `loadSalesreps`, `loadProducts`
 
-| Source (`staging.orders`) | Cible | Règle |
+| Source (`staging.orders`) | Target | Rule |
 |---|---|---|
-| `customer_code, customer_name, customer_city, customer_dept, customer_segment` | `dwh.dim_customer` (`customer_key` serial, `customer_code` unique, `customer_name, city, dept, segment`) | `SELECT DISTINCT` sur la source (adaptateur `selectCustomers`), renommage des colonnes dans le SQL, clé de substitution générée par la séquence de la base |
-| `salesrep_code, salesrep_name, salesrep_region` | `dwh.dim_salesrep` | idem (`selectSalesreps` → `insertSalesreps`) |
-| `product_code, product_name, product_category, product_brand` | `dwh.dim_product` | idem (`selectProducts` → `insertProducts`) |
+| `customer_code, customer_name, customer_city, customer_dept, customer_segment` | `dwh.dim_customer` (`customer_key` serial, `customer_code` unique, `customer_name, city, dept, segment`) | `SELECT DISTINCT` on the source (`selectCustomers` adapter), columns renamed in the SQL, surrogate key generated by the database sequence |
+| `salesrep_code, salesrep_name, salesrep_region` | `dwh.dim_salesrep` | same (`selectSalesreps` → `insertSalesreps`) |
+| `product_code, product_name, product_category, product_brand` | `dwh.dim_product` | same (`selectProducts` → `insertProducts`) |
 
-Le flow copie la liste de documents renvoyée par le CustomSQL (`<svc>Output/results[]`) directement dans l'entrée
-du BatchInsert (`<svc>Input/inputs[]`) : les noms de champs sont alignés par construction (alias SQL = colonnes
-cible), donc **une seule copie de référence**, sans boucle. Le BatchInsert émet un seul `executeBatch` JDBC.
+The flow copies the document list returned by the CustomSQL (`<svc>Output/results[]`) straight into the
+BatchInsert input (`<svc>Input/inputs[]`): field names are aligned by construction (SQL aliases = target
+columns), so **a single reference copy**, no loop. The BatchInsert issues a single JDBC `executeBatch`.
 
-### 3.2 Dimension temporelle — `loadDates`
+### 3.2 Time dimension: `loadDates`
 
-Entrée : les 1 096 dates distinctes de la source (`selectDates`). Le flow itère (LOOP `rawDates` → `dates`) et
-calcule chaque attribut avec `pub.date:dateTimeFormat` (locale `fr_FR`, règle ISO), `pub.math` et un BRANCH :
+Input: the 1,096 distinct dates of the source (`selectDates`). The flow iterates (LOOP `rawDates` → `dates`) and
+computes each attribute with `pub.date:dateTimeFormat` (locale `en_GB`, ISO rule; `fr_FR` for the French demo),
+`pub.math` and a BRANCH:
 
-| Colonne `dwh.dim_date` | Exemple (2025-09-08) | Étape du flow |
+| Column `dwh.dim_date` | Example (2025-09-08) | Flow step |
 |---|---|---|
-| `date_key` | 20250908 | `dateTimeFormat yyyyMMdd` — clé référencée par la table de faits |
-| `full_date` | 2025-09-08 | copie |
+| `date_key` | 20250908 | `dateTimeFormat yyyyMMdd`, the key referenced by the fact table |
+| `full_date` | 2025-09-08 | copy |
 | `year_num` | 2025 | `yyyy` |
-| `quarter_num` | 3 | `pub.math:addInts (mois + 2)` puis `pub.math:divideInts (/ 3)` |
-| `quarter_label` | 2025-T3 | MAPSET avec substitution `%dates/year_num%-T%dates/quarter_num%` |
-| `month_num`, `month_name`, `year_month` | 9, septembre, 2025-09 | `M`, `MMMM`, `yyyy-MM` |
-| `week_of_year`, `year_week` | 37, 2025-S37 | `w`, `YYYY-'S'ww` : semaines ISO (lundi, 4 jours minimum) → 2023-01-01 = `2022-S52`, 2024-12-30 = `2025-S01` |
-| `day_of_month`, `day_of_week`, `day_name` | 8, 1, lundi | `d`, `u` (1 = lundi … 7 = dimanche), `EEEE` |
-| `is_weekend` | false | BRANCH sur `day_of_week` : 6 ou 7 → true, sinon false |
+| `quarter_num` | 3 | `pub.math:addInts (month + 2)` then `pub.math:divideInts (/ 3)` |
+| `quarter_label` | 2025-Q3 | MAPSET with substitution `%dates/year_num%-Q%dates/quarter_num%` (`T` in French) |
+| `month_num`, `month_name`, `year_month` | 9, September, 2025-09 | `M`, `MMMM`, `yyyy-MM` |
+| `week_of_year`, `year_week` | 37, 2025-W37 | `w`, `YYYY-'W'ww`: ISO weeks (Monday, 4 days minimum) → 2023-01-01 = `2022-W52`, 2024-12-30 = `2025-W01` (`S` in French) |
+| `day_of_month`, `day_of_week`, `day_name` | 8, 1, Monday | `d`, `u` (1 = Monday … 7 = Sunday), `EEEE` |
+| `is_weekend` | false | BRANCH on `day_of_week`: 6 or 7 → true, otherwise false |
 
-Le tableau de sortie de la LOOP (`dates`) est ensuite chargé d'un bloc par `insertDates`. Point à retenir pour
-la discussion ETL : **la logique calendaire vit dans le flow**, pas dans la base, et elle est visible pas à pas
-dans Designer (ou dans `flows.html`).
+The LOOP output array (`dates`) is then loaded in one go by `insertDates`. Worth remembering for the ETL
+discussion: **the calendar logic lives in the flow**, not in the database, and it is visible step by step
+in Designer (or in `flows.html`).
 
-### 3.3 Table de faits — `loadFactChunk (fromId, toId)`
+### 3.3 Fact table: `loadFactChunk (fromId, toId)`
 
-1. **Extraction + lookup** (`selectFactChunk`) : une requête paramétrée sur l'intervalle `]fromId, toId]` de
-   `order_line_id`, qui joint la source aux trois dimensions sur leurs codes métier pour rapporter les clés de
-   substitution (`customer_key`, `salesrep_key`, `product_key`) et calcule `date_key = to_char(order_date, 'YYYYMMDD')`.
-   C'est l'équivalent des « lookups » d'un ETL, réalisé par jointure dans la base (le meilleur endroit pour le faire).
-2. **Transformation ligne à ligne** : LOOP sur `rows` (type `star.docs:FactRow`) vers `facts` (type `star.docs:Fact`) :
-   - MAP : projection des 8 champs (`order_line_id, order_id, date_key, customer_key, salesrep_key, product_key, quantity, unit_price`) ;
-   - `pub.math:multiplyFloats (quantity × unit_price, précision 2)` → `amount`.
-   Une règle métier supplémentaire (remise, devise, TVA, filtrage) s'ajouterait ici, sous forme de MAP, BRANCH ou
-   INVOKE, sans toucher au SQL.
-3. **Chargement** : `insertFacts` (BatchInsert, 9 colonnes) ; `loaded_at` est renseigné par défaut par la base.
-4. `commit`, ou `rollback` + échec en cas d'erreur (le lot est alors rejouable à l'identique).
+1. **Extraction + lookup** (`selectFactChunk`): one parameterized query on the `]fromId, toId]` interval of
+   `order_line_id`, joining the source to the three dimensions on their business codes to bring back the
+   surrogate keys (`customer_key`, `salesrep_key`, `product_key`) and computing `date_key = to_char(order_date, 'YYYYMMDD')`.
+   This is the equivalent of an ETL's lookups, done as a join in the database (the best place to do it).
+2. **Row-by-row transformation**: LOOP over `rows` (type `star.docs:FactRow`) into `facts` (type `star.docs:Fact`):
+   - MAP: projection of the 8 fields (`order_line_id, order_id, date_key, customer_key, salesrep_key, product_key, quantity, unit_price`);
+   - `pub.math:multiplyFloats (quantity × unit_price, precision 2)` → `amount`.
+   An additional business rule (discount, currency, VAT, filtering) would be added here, as a MAP, BRANCH or
+   INVOKE, without touching the SQL.
+3. **Loading**: `insertFacts` (BatchInsert, 9 columns); `loaded_at` is filled in by the database default.
+4. `commit`, or `rollback` + failure on error (the batch can then be replayed identically).
 
-### 3.4 Vidage — `truncateStar`
+### 3.4 Truncation: `truncateStar`
 
-`SELECT dwh.truncate_star()` (fonction PL/pgSQL : TRUNCATE des cinq tables cibles, séquences remises à zéro),
-dans une transaction comme les autres étapes.
+`SELECT dwh.truncate_star()` (PL/pgSQL function: TRUNCATE of the five target tables, sequences reset),
+inside a transaction like every other step.
 
-## 4. L'orchestrateur — `runPipeline` (et `runPipelineX2`, `runPipelineX4`)
+## 4. The orchestrator: `runPipeline` (and `runPipelineX2`, `runPipelineX4`)
 
-1. Valeurs par défaut (`chunkSize` = 20 000), identifiant `RUN-yyyyMMdd-HHmmss`, ligne `PIPELINE` en `RUNNING`
-   dans `dwh.etl_run_log` (visible immédiatement par l'UI grâce à la connexion sans transaction).
-2. TRY : les cinq étapes de préparation, chacune encadrée par `beginStep` (date lisible + compteur nanosecondes)
-   et `logStep` (durée en ms calculée par le flow, nombre de lignes, statut).
-3. **Plan de lots** : `selectChunks` renvoie la liste `(chunk_no, from_id, to_id)` par `generate_series` sur
-   `order_line_id` ; la taille de lot vient de l'UI.
-4. **LOOP sur le plan** (1, 2 ou 4 itérations simultanées selon la variante, attribut `MAX-THREADS` de la LOOP) :
-   lecture du drapeau d'arrêt (`dwh.etl_control`) → si levé, le lot est ignoré ; sinon `loadFactChunk` puis
-   `logStep FACT_CHUNK_n`. Aucune variable partagée entre itérations (compatible multithread) ; le total chargé est
-   relu en base après la boucle.
-5. Statut final : `STOPPED` si le drapeau a été levé, `DONE` sinon ; CATCH → `FAILED` avec le message d'erreur.
-6. `PIPELINE_END` puis mise à jour de la ligne `PIPELINE` (durée totale, lignes, statut, message).
+1. Default values (`chunkSize` = 20,000), identifier `RUN-yyyyMMdd-HHmmss`, `PIPELINE` row set to `RUNNING`
+   in `dwh.etl_run_log` (visible immediately to the UI thanks to the non-transactional connection).
+2. TRY: the five preparation steps, each wrapped by `beginStep` (readable date + nanosecond counter)
+   and `logStep` (duration in ms computed by the flow, row count, status).
+3. **Batch plan**: `selectChunks` returns the list `(chunk_no, from_id, to_id)` via `generate_series` on
+   `order_line_id`; the batch size comes from the UI.
+4. **LOOP over the plan** (1, 2 or 4 simultaneous iterations depending on the variant, `MAX-THREADS` attribute of the LOOP):
+   read the stop flag (`dwh.etl_control`) → if raised, the batch is skipped; otherwise `loadFactChunk` then
+   `logStep FACT_CHUNK_n`. No variable shared between iterations (multithread-safe); the total loaded is
+   read back from the database after the loop.
+5. Final status: `STOPPED` if the flag was raised, `DONE` otherwise; CATCH → `FAILED` with the error message.
+6. `PIPELINE_END` then update of the `PIPELINE` row (total duration, rows, status, message).
 
-Le parallélisme ne change **rien** à la logique métier : `runPipelineX4` est le même flow avec `MAX-THREADS = 4`
-sur la LOOP ; chaque itération porte sa propre transaction sur sa propre connexion du pool.
+Parallelism changes **nothing** in the business logic: `runPipelineX4` is the same flow with `MAX-THREADS = 4`
+on the LOOP; each iteration carries its own transaction on its own connection from the pool.
 
-## 5. Lancement, arrêt, réinitialisation
+## 5. Start, stop, reset
 
-- `star.etl:startPipeline (chunkSize, threads)` : choisit l'orchestrateur, calcule « maintenant + 3 s »
-  (`pub.date:incrementDate`) et le planifie avec `pub.scheduler:addOneTimeTask` (tâche unique, utilisateur
-  `Administrator`). L'appel HTTP rend la main tout de suite.
-- `star.api:start` refuse le lancement si la dernière exécution est encore `RUNNING`, réarme le drapeau d'arrêt
-  puis appelle `startPipeline`.
-- `star.api:stop` positionne `stop_requested = true` ; l'orchestrateur saute les lots restants et se termine
-  proprement en `STOPPED` (les lots en cours sont commités).
-- `star.api:reset` appelle `dwh.reset_demo()` : cinq tables vidées, journal purgé, drapeau réarmé.
+- `star.etl:startPipeline (chunkSize, threads)`: picks the orchestrator, computes "now + 3 s"
+  (`pub.date:incrementDate`) and schedules it with `pub.scheduler:addOneTimeTask` (one-time task, user
+  `Administrator`). The HTTP call returns immediately.
+- `star.api:start` refuses to start if the last run is still `RUNNING`, re-arms the stop flag
+  then calls `startPipeline`.
+- `star.api:stop` sets `stop_requested = true`; the orchestrator skips the remaining batches and ends
+  cleanly with `STOPPED` (batches in progress are committed).
+- `star.api:reset` calls `dwh.reset_demo()`: five tables truncated, log purged, flag re-armed.
 
-## 6. Ce que l'UI interroge
+## 6. What the UI queries
 
-| API | Requêtes (connexion `dwhLog`) | Usage |
+| API | Queries (`dwhLog` connection) | Use |
 |---|---|---|
-| `status` (toutes les 2 s) | volumes par table, journal de la dernière exécution, 6 dernières lignes de faits jointes aux dimensions, 6 prochaines lignes source | compteurs, schéma en étoile, journal, « avant / après » |
-| `chart` (toutes les 6 s) | CA par mois (`fact_sales ⋈ dim_date`) | graphique |
-| `analyze (axis)` | 13 requêtes en liste blanche (`anYear`, `anQuarter`, `anMonth`, `anWeek`, `anWeekday`, `anSegment`, `anDept`, `anCustomer`, `anRegion`, `anSalesrep`, `anCategory`, `anBrand`, `anProduct`) : CA, quantités, lignes, panier moyen | panneau « Explorer » |
-| `dimension (name)` | 12 premières lignes de `dim_date`, `dim_customer`, `dim_salesrep`, `dim_product` | contenu des dimensions |
-| `source` | lignes, montant, commandes, période de `staging.orders` | réconciliation affichée |
+| `status` (every 2 s) | volumes per table, log of the last run, last 6 fact rows joined to the dimensions, next 6 source rows | counters, star schema, log, "before / after" |
+| `chart` (every 6 s) | revenue by month (`fact_sales ⋈ dim_date`) | chart |
+| `analyze (axis)` | 13 whitelisted queries (`anYear`, `anQuarter`, `anMonth`, `anWeek`, `anWeekday`, `anSegment`, `anDept`, `anCustomer`, `anRegion`, `anSalesrep`, `anCategory`, `anBrand`, `anProduct`): revenue, quantities, lines, average line amount | "Explore" panel |
+| `dimension (name)` | first 12 rows of `dim_date`, `dim_customer`, `dim_salesrep`, `dim_product` | dimension contents |
+| `source` | rows, amount, orders, period of `staging.orders` | reconciliation display |
 
-## 7. Traçabilité (lineage) résumée
+## 7. Lineage summary
 
-| `staging.orders` | → | cible | par |
+| `staging.orders` | → | target | by |
 |---|---|---|---|
 | `order_line_id`, `order_id`, `quantity`, `unit_price` | → | `fact_sales` (+ `amount`) | `loadFactChunk` |
-| `order_date` | → | `dim_date` (13 attributs) et `fact_sales.date_key` | `loadDates`, `selectFactChunk` |
-| `customer_*` | → | `dim_customer` et `fact_sales.customer_key` | `loadCustomers`, jointure dans `selectFactChunk` |
-| `salesrep_*` | → | `dim_salesrep` et `fact_sales.salesrep_key` | `loadSalesreps`, jointure |
-| `product_*` | → | `dim_product` et `fact_sales.product_key` | `loadProducts`, jointure |
+| `order_date` | → | `dim_date` (13 attributes) and `fact_sales.date_key` | `loadDates`, `selectFactChunk` |
+| `customer_*` | → | `dim_customer` and `fact_sales.customer_key` | `loadCustomers`, join in `selectFactChunk` |
+| `salesrep_*` | → | `dim_salesrep` and `fact_sales.salesrep_key` | `loadSalesreps`, join |
+| `product_*` | → | `dim_product` and `fact_sales.product_key` | `loadProducts`, join |
 
-Contrôles de bout en bout : `dwh.v_reconciliation` (lignes et montant source = faits) et la comparaison ligne à
-ligne `amount = round(quantity × unit_price, 2)` (0 écart sur 999 343 lignes).
+End-to-end checks: `dwh.v_reconciliation` (source rows and amount = facts) and the row-by-row comparison
+`amount = round(quantity × unit_price, 2)` (0 difference over 999,343 rows).
 
-## 8. Comment modifier ou étendre
+## 8. How to modify or extend
 
-- **Nouvelle règle de transformation** : dans `wm/flows.py`, ajouter une étape dans la LOOP de `LOAD_FACT_CHUNK`
-  (MAP / BRANCH / INVOKE `pub.*`), puis `python3 wm/flows.py loadFactChunk` et `python3 wm/test_steps.py`.
-- **Nouvelle dimension ou nouvelle table de faits** : un CustomSQL d'extraction + un BatchInsert (`wm/adapters.py`),
-  un type de document si une LOOP doit typer ses éléments, un sous-flux sur le patron du §2, une ligne
-  `step_block(...)` dans l'orchestrateur.
-- **Nouvelle source** (autre table de staging) : mêmes briques ; la spécification du client prévoit ~80 tables de
-  staging, ~50 normalisées et ~90 tables de faits, chacune devenant un sous-flux journalisé de moins de 5 minutes.
+- **New transformation rule**: in `wm/flows.py`, add a step inside the LOOP of `LOAD_FACT_CHUNK`
+  (MAP / BRANCH / INVOKE `pub.*`), then `python3 wm/flows.py loadFactChunk` and `python3 wm/test_steps.py`.
+- **New dimension or new fact table**: one extraction CustomSQL + one BatchInsert (`wm/adapters.py`),
+  a document type if a LOOP has to type its elements, a sub-flow following the pattern of section 2, one
+  `step_block(...)` line in the orchestrator.
+- **New source** (another staging table): same building blocks; a typical ERP replication has tens of staging
+  tables, normalized tables and fact tables, each becoming a logged sub-flow of less than 5 minutes.

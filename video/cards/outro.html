@@ -1,13 +1,13 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"></head><body>
-<div class="kicker">Bilan</div>
-<h1>Un million de lignes, <span>un schéma en étoile</span>, zéro écart</h1>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"></head><body>
+<div class="kicker">Wrap-up</div>
+<h1>One million rows, <span>one star schema</span>, zero discrepancy</h1>
 <div class="grid">
-  <div><b>Volume</b>999 343 lignes de commandes → 999 343 faits + 4 dimensions</div>
-  <div><b>Temps de traitement</b><span id="t1">1 lot à la fois : 1 min 57 s</span> · <span id="t4">4 lots en parallèle : voir vidéo</span></div>
-  <div><b>Qualité</b>Réconciliation exacte : mêmes lignes, même montant total, montants ligne à ligne identiques</div>
-  <div><b>Exploitation</b>Journal par étape, arrêt propre, reprise, réinitialisation ; requêtes sur chaque dimension pendant le chargement</div>
-  <div><b>Industrialisation</b>Package, connexions, services et flows créés par API (MCP) : reproductible en une commande</div>
-  <div><b>Et ensuite</b>~80 tables de staging, 50 normalisées, 90 tables de faits : même patron, sous-flux par table</div>
+  <div><b>Volume</b>999,343 order lines → 999,343 facts + 4 dimensions</div>
+  <div><b>Processing time</b><span id="t1">1 batch at a time: 1 min 57 s</span> · <span id="t4">4 parallel batches: see video</span></div>
+  <div><b>Quality</b>Exact reconciliation: same rows, same total amount, every line amount identical</div>
+  <div><b>Operations</b>Per-step log, clean stop, restart, reset; queries on every dimension while loading</div>
+  <div><b>Industrialization</b>Package, connections, services and flows created through an API (MCP): reproducible in one command</div>
+  <div><b>Next</b>~80 staging tables, 50 normalized, 90 fact tables: same pattern, one sub-flow per table</div>
 </div>
-<div class="foot"><span>IBM webMethods Integration Server 12.1 · adaptateur JDBC · PostgreSQL 16</span><span>septembre 2026</span></div>
+<div class="foot"><span>IBM webMethods Integration Server 12.1 · JDBC adapter · PostgreSQL 16</span><span>September 2026</span></div>
 </body></html>

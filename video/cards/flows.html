@@ -1,13 +1,13 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"></head><body>
-<div class="kicker">Correspondance ETL → webMethods</div>
-<h1>Les mêmes briques, <span>dans l'Integration Server</span></h1>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="card.css"></head><body>
+<div class="kicker">ETL concepts → webMethods</div>
+<h1>The same building blocks, <span>inside the Integration Server</span></h1>
 <div class="grid">
-  <div><b>Mapping / transformation</b>Flow service : LOOP ligne à ligne, MAP, pub.math, pub.date, BRANCH</div>
-  <div><b>Source / target definitions</b>Services adaptateur JDBC : CustomSQL (extraction), BatchInsert (chargement)</div>
-  <div><b>Lookup</b>Résolution des clés de substitution par jointure dans l'extraction du lot</div>
-  <div><b>Session / transaction control</b>pub.art.transaction : start, commit, rollback par lot (sous-flux &lt; 5 min)</div>
-  <div><b>Workflow / scheduler</b>Orchestrateur runPipeline lancé par le scheduler de l'IS, journal dwh.etl_run_log</div>
-  <div><b>Partitioning</b>LOOP parallèle native : 1, 2 ou 4 lots chargés simultanément</div>
+  <div><b>Mapping / transformation</b>Flow service: row-by-row LOOP, MAP, pub.math, pub.date, BRANCH</div>
+  <div><b>Source / target definitions</b>JDBC adapter services: CustomSQL (extraction), BatchInsert (loading)</div>
+  <div><b>Lookup</b>Surrogate keys resolved by a join in the batch extraction query</div>
+  <div><b>Session / transaction control</b>pub.art.transaction: start, commit, rollback per batch (sub-flows &lt; 5 min)</div>
+  <div><b>Workflow / scheduler</b>runPipeline orchestrator started by the IS scheduler, dwh.etl_run_log journal</div>
+  <div><b>Partitioning</b>Native parallel LOOP: 1, 2 or 4 batches loaded at the same time</div>
 </div>
-<div class="foot"><span>Extraction → transformation → chargement, chaque étape journalisée et rejouable</span><span>StarSchemaETL</span></div>
+<div class="foot"><span>Extract → transform → load, every step logged and replayable</span><span>StarSchemaETL</span></div>
 </body></html>

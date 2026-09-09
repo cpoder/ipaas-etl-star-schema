@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Démo ETL webMethods · schéma en étoile</title>
+<title>webMethods ETL demo · star schema</title>
 <style>
   :root {
     --bg: #0f1419; --panel: #161c24; --panel2: #1c2430; --line: #2a3542; --text: #e6edf3; --muted: #8b98a8;
@@ -81,35 +81,35 @@
 </head>
 <body>
 <header>
-  <h1>Démo ETL webMethods <small>table de commandes → schéma en étoile (un iPaaS à la place de l'ETL)</small></h1>
+  <h1>webMethods ETL demo <small>order table → star schema (an iPaaS instead of the ETL)</small></h1>
   <div class="spacer"></div>
-  <span id="pill" class="pill">INITIALISATION</span>
-  <label class="k">Lots de <select id="chunk"><option value="10000">10 000</option><option value="20000" selected>20 000</option><option value="50000">50 000</option></select> lignes</label>
-  <label class="k">Parallélisme <select id="threads"><option value="1" selected>1 lot</option><option value="2">2 lots</option><option value="4">4 lots</option></select></label>
-  <button id="btnStart" class="primary">▶ Lancer la démo</button>
-  <button id="btnStop">■ Arrêter</button>
-  <button id="btnReset" class="danger">↺ Réinitialiser</button>
+  <span id="pill" class="pill">INITIALIZING</span>
+  <label class="k">Batches of <select id="chunk"><option value="10000">10,000</option><option value="20000" selected>20,000</option><option value="50000">50,000</option></select> rows</label>
+  <label class="k">Parallelism <select id="threads"><option value="1" selected>1 batch</option><option value="2">2 batches</option><option value="4">4 batches</option></select></label>
+  <button id="btnStart" class="primary">▶ Start the demo</button>
+  <button id="btnStop">■ Stop</button>
+  <button id="btnReset" class="danger">↺ Reset</button>
 </header>
 
 <main>
   <section class="kpis">
     <div class="kpi"><div class="l">Source · staging.orders</div><div class="v" id="kSrc">–</div><div class="s" id="kSrcSize">&nbsp;</div><div class="s" id="kSrcAmt">&nbsp;</div></div>
-    <div class="kpi"><div class="l">Faits chargés · fact_sales</div><div class="v" id="kFact">–</div><div class="s" id="kFactPct">&nbsp;</div><div class="bar"><div id="kBar"></div></div></div>
-    <div class="kpi"><div class="l">Débit</div><div class="v" id="kRate">–</div><div class="s">lignes / seconde (dernier lot)</div></div>
-    <div class="kpi"><div class="l">Temps écoulé</div><div class="v" id="kElapsed">–</div><div class="s" id="kEta">&nbsp;</div></div>
-    <div class="kpi"><div class="l">Montant chargé</div><div class="v" id="kAmount">–</div><div class="s" id="kAmountS">somme de fact_sales.amount</div></div>
-    <div class="kpi"><div class="l">Dimensions</div><div class="v" id="kDims">–</div><div class="s">date · client · commercial · produit</div></div>
+    <div class="kpi"><div class="l">Facts loaded · fact_sales</div><div class="v" id="kFact">–</div><div class="s" id="kFactPct">&nbsp;</div><div class="bar"><div id="kBar"></div></div></div>
+    <div class="kpi"><div class="l">Throughput</div><div class="v" id="kRate">–</div><div class="s">rows / second (last batch)</div></div>
+    <div class="kpi"><div class="l">Elapsed time</div><div class="v" id="kElapsed">–</div><div class="s" id="kEta">&nbsp;</div></div>
+    <div class="kpi"><div class="l">Amount loaded</div><div class="v" id="kAmount">–</div><div class="s" id="kAmountS">sum of fact_sales.amount</div></div>
+    <div class="kpi"><div class="l">Dimensions</div><div class="v" id="kDims">–</div><div class="s">date · customer · sales rep · product</div></div>
   </section>
 
   <section class="grid2">
     <div class="panel">
-      <h2>Schéma en étoile <span class="tag" id="stepTag">en attente</span></h2>
+      <h2>Star schema <span class="tag" id="stepTag">waiting</span></h2>
       <svg id="star" viewBox="0 0 760 330" width="100%" height="330">
         <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4589ff"/></marker></defs>
         <!-- source -->
         <rect class="box" id="bSrc" x="20" y="120" width="150" height="90"/>
         <text class="lbl" x="95" y="145" text-anchor="middle">staging.orders</text>
-        <text class="sub" x="95" y="162" text-anchor="middle">table « classique » dénormalisée</text>
+        <text class="sub" x="95" y="162" text-anchor="middle">flat, denormalized table</text>
         <text class="cnt" x="95" y="192" text-anchor="middle" id="tSrc">–</text>
         <!-- flow arrow -->
         <path class="flow" id="flowArrow" d="M172,165 C220,165 230,165 285,165" marker-end="url(#arr)"/>
@@ -123,87 +123,87 @@
         <!-- fact -->
         <rect class="box" id="bFact" x="300" y="120" width="155" height="90"/>
         <text class="lbl" x="377" y="145" text-anchor="middle">fact_sales</text>
-        <text class="sub" x="377" y="162" text-anchor="middle">table de faits</text>
+        <text class="sub" x="377" y="162" text-anchor="middle">fact table</text>
         <text class="cnt" x="377" y="192" text-anchor="middle" id="tFact">–</text>
         <!-- dims -->
         <rect class="box" id="bDate" x="560" y="20" width="180" height="70"/>
         <text class="lbl" x="650" y="42" text-anchor="middle">dim_date</text>
-        <text class="sub" x="650" y="57" text-anchor="middle">dimension temporelle</text>
+        <text class="sub" x="650" y="57" text-anchor="middle">time dimension</text>
         <text class="cnt" x="650" y="80" text-anchor="middle" id="tDate" style="font-size:16px">–</text>
         <rect class="box" id="bCust" x="560" y="240" width="180" height="70"/>
         <text class="lbl" x="650" y="262" text-anchor="middle">dim_customer</text>
-        <text class="sub" x="650" y="277" text-anchor="middle">clients</text>
+        <text class="sub" x="650" y="277" text-anchor="middle">customers</text>
         <text class="cnt" x="650" y="300" text-anchor="middle" id="tCust" style="font-size:16px">–</text>
         <rect class="box" id="bRep" x="190" y="20" width="180" height="70"/>
         <text class="lbl" x="280" y="42" text-anchor="middle">dim_salesrep</text>
-        <text class="sub" x="280" y="57" text-anchor="middle">commerciaux</text>
+        <text class="sub" x="280" y="57" text-anchor="middle">sales reps</text>
         <text class="cnt" x="280" y="80" text-anchor="middle" id="tRep" style="font-size:16px">–</text>
         <rect class="box" id="bProd" x="190" y="240" width="180" height="70"/>
         <text class="lbl" x="280" y="262" text-anchor="middle">dim_product</text>
-        <text class="sub" x="280" y="277" text-anchor="middle">produits</text>
+        <text class="sub" x="280" y="277" text-anchor="middle">products</text>
         <text class="cnt" x="280" y="300" text-anchor="middle" id="tProd" style="font-size:16px">–</text>
       </svg>
     </div>
     <div class="panel">
-      <h2>Journal d'exécution <span class="tag" id="runTag"></span></h2>
+      <h2>Execution log <span class="tag" id="runTag"></span></h2>
       <div class="logwrap">
-        <table id="log"><thead><tr><th>Étape</th><th>Début</th><th class="num">Durée</th><th class="num">Lignes</th><th>Statut</th><th>Détail</th></tr></thead><tbody></tbody></table>
+        <table id="log"><thead><tr><th>Step</th><th>Start</th><th class="num">Duration</th><th class="num">Rows</th><th>Status</th><th>Details</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
   </section>
 
   <section class="grid2">
     <div class="panel">
-      <h2>Prochaines lignes source à transformer <span class="tag c-src">staging.orders</span></h2>
+      <h2>Next source rows to transform <span class="tag c-src">staging.orders</span></h2>
       <div class="tblwrap">
-        <table id="src"><thead><tr><th>#</th><th>Commande</th><th class="c-date">Date</th><th class="c-cust">Client</th><th class="c-rep">Commercial</th><th class="c-prod">Produit</th><th class="num">Qté</th><th class="num">PU</th></tr></thead><tbody></tbody></table>
+        <table id="src"><thead><tr><th>#</th><th>Order</th><th class="c-date">Date</th><th class="c-cust">Customer</th><th class="c-rep">Sales rep</th><th class="c-prod">Product</th><th class="num">Qty</th><th class="num">Unit price</th></tr></thead><tbody></tbody></table>
       </div>
-      <div class="legend"><span class="c-date">date → dim_date</span><span class="c-cust">client → dim_customer</span><span class="c-rep">commercial → dim_salesrep</span><span class="c-prod">produit → dim_product</span><span class="c-fact">mesures → fact_sales</span></div>
+      <div class="legend"><span class="c-date">date → dim_date</span><span class="c-cust">customer → dim_customer</span><span class="c-rep">sales rep → dim_salesrep</span><span class="c-prod">product → dim_product</span><span class="c-fact">measures → fact_sales</span></div>
     </div>
     <div class="panel">
-      <h2>Dernières lignes chargées <span class="tag c-fact">dwh.fact_sales ⋈ dimensions</span></h2>
+      <h2>Last rows loaded <span class="tag c-fact">dwh.fact_sales ⋈ dimensions</span></h2>
       <div class="tblwrap">
-        <table id="fact"><thead><tr><th>#</th><th class="c-date">date_key</th><th class="c-cust">customer_key</th><th class="c-rep">salesrep_key</th><th class="c-prod">product_key</th><th class="num">Qté</th><th class="num">PU</th><th class="num c-fact">Montant</th></tr></thead><tbody></tbody></table>
+        <table id="fact"><thead><tr><th>#</th><th class="c-date">date_key</th><th class="c-cust">customer_key</th><th class="c-rep">salesrep_key</th><th class="c-prod">product_key</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num c-fact">Amount</th></tr></thead><tbody></tbody></table>
       </div>
-      <div class="legend"><span class="c-fact">montant = quantité × prix unitaire, calculé par le flow</span></div>
+      <div class="legend"><span class="c-fact">amount = quantity × unit price, computed by the flow</span></div>
     </div>
   </section>
 
   <section class="grid2">
     <div class="panel">
-      <h2>Explorer le schéma en étoile <span class="tag" id="anTag">requête sur fact_sales ⋈ dimension</span></h2>
+      <h2>Explore the star schema <span class="tag" id="anTag">query on fact_sales ⋈ dimension</span></h2>
       <div class="controls">
-        <label class="k">Axe <select id="axis">
-          <optgroup label="dim_date"><option value="anYear">Année</option><option value="anQuarter">Trimestre</option><option value="anMonth">Mois</option><option value="anWeek">Semaine (ISO)</option><option value="anWeekday">Jour de semaine</option></optgroup>
-          <optgroup label="dim_customer"><option value="anSegment" selected>Segment client</option><option value="anDept">Département (top 15)</option><option value="anCustomer">Client (top 10)</option></optgroup>
-          <optgroup label="dim_salesrep"><option value="anRegion">Région commerciale</option><option value="anSalesrep">Commercial (top 10)</option></optgroup>
-          <optgroup label="dim_product"><option value="anCategory">Catégorie produit</option><option value="anBrand">Marque</option><option value="anProduct">Produit (top 10)</option></optgroup>
+        <label class="k">Axis <select id="axis">
+          <optgroup label="dim_date"><option value="anYear">Year</option><option value="anQuarter">Quarter</option><option value="anMonth">Month</option><option value="anWeek">Week (ISO)</option><option value="anWeekday">Weekday</option></optgroup>
+          <optgroup label="dim_customer"><option value="anSegment" selected>Customer segment</option><option value="anDept">Department (top 15)</option><option value="anCustomer">Customer (top 10)</option></optgroup>
+          <optgroup label="dim_salesrep"><option value="anRegion">Sales region</option><option value="anSalesrep">Sales rep (top 10)</option></optgroup>
+          <optgroup label="dim_product"><option value="anCategory">Product category</option><option value="anBrand">Brand</option><option value="anProduct">Product (top 10)</option></optgroup>
         </select></label>
-        <label class="k">Mesure <select id="measure"><option value="amount" selected>Chiffre d'affaires</option><option value="quantity">Quantités</option><option value="lines">Lignes de commande</option><option value="avg_amount">Panier moyen (ligne)</option></select></label>
+        <label class="k">Measure <select id="measure"><option value="amount" selected>Revenue</option><option value="quantity">Quantities</option><option value="lines">Order lines</option><option value="avg_amount">Average line amount</option></select></label>
         <span class="k" id="anMeta"></span>
       </div>
-      <div class="tblwrap" style="max-height:330px;overflow:auto"><table id="an"><thead><tr><th>Valeur</th><th class="num">Mesure</th><th class="num">Part</th><th class="barcell"></th></tr></thead><tbody></tbody></table></div>
+      <div class="tblwrap" style="max-height:330px;overflow:auto"><table id="an"><thead><tr><th>Value</th><th class="num">Measure</th><th class="num">Share</th><th class="barcell"></th></tr></thead><tbody></tbody></table></div>
     </div>
     <div class="panel">
-      <h2>Contenu des dimensions <span class="tag" id="dimTag">12 premières lignes</span></h2>
+      <h2>Dimension contents <span class="tag" id="dimTag">first 12 rows</span></h2>
       <div class="tabs"><button data-dim="date" class="on">dim_date</button><button data-dim="customer">dim_customer</button><button data-dim="salesrep">dim_salesrep</button><button data-dim="product">dim_product</button></div>
       <div class="tblwrap"><table id="dim"><thead></thead><tbody></tbody></table></div>
     </div>
   </section>
 
   <section class="panel">
-    <h2>Chiffre d'affaires par mois (fact_sales ⋈ dim_date) <span class="tag" id="chartTag"></span></h2>
+    <h2>Revenue by month (fact_sales ⋈ dim_date) <span class="tag" id="chartTag"></span></h2>
     <svg id="chart" viewBox="0 0 1200 220" width="100%" height="220" preserveAspectRatio="none"></svg>
   </section>
 </main>
-<footer>Integration Server webMethods 12.1 · package StarSchemaETL · adaptateur JDBC · PostgreSQL 16 (Docker) · flows et services adaptateur générés par le serveur MCP webmethods-is (putNode)</footer>
+<footer>webMethods Integration Server 12.1 · StarSchemaETL package · JDBC adapter · PostgreSQL 16 (Docker) · flows and adapter services generated through the webmethods-is MCP server (putNode)</footer>
 <div id="toast"></div>
 
 <script>
 const AUTH = "Basic " + btoa("Administrator:manage");
-const LANG = new URLSearchParams(location.search).get("lang") === "en" ? "en" : "fr";
-const fmt = new Intl.NumberFormat(LANG === "en" ? "en-US" : "fr-FR");
-const fmtEur = new Intl.NumberFormat(LANG === "en" ? "en-US" : "fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const LANG = new URLSearchParams(location.search).get("lang") === "fr" ? "fr" : "en";
+const fmt = new Intl.NumberFormat(LANG === "fr" ? "fr-FR" : "en-GB");
+const fmtEur = new Intl.NumberFormat(LANG === "fr" ? "fr-FR" : "en-GB", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const L = {
   fr: { ofSource: " % de la source · ", orders: "commandes", reconciled: "✓ réconcilié avec la source : mêmes lignes, même montant", sumSource: "somme de fact_sales.amount · source ", sum: "somme de fact_sales.amount",
         rateSub: (x) => `lignes / s global · dernier lot ${x} l/s`, parallel: (n) => ` · ${n} lots en parallèle`, rowsPerSec: "lignes / seconde", scheduled: "PLANIFIÉ", ready: "PRÊT", unreachable: "IS INJOIGNABLE",
@@ -212,7 +212,7 @@ const L = {
         anMeta: (n, m, ms) => `${n} valeurs · ${m} lignes de faits · ${ms} ms`, noData: "aucune donnée chargée", error: "erreur : ", dimTag: (d) => `dim_${d} · 12 premières lignes`, dimEmpty: (d) => `dim_${d} · vide`,
         chartTag: (n, e) => `${n} mois · ${e}`, refused: "Lancement refusé", alreadyRunning: "Un pipeline est déjà en cours", startErr: "Erreur au lancement : ",
         scheduledToast: (svc, size, thr, at) => `Pipeline planifié (${svc}, lots de ${size} lignes, ${thr} en parallèle) · départ à ${at}`, stopToast: "Arrêt demandé : le pipeline s'arrêtera à la fin du lot en cours", err: "Erreur : ",
-        confirmStop: "Un pipeline est en cours. L'arrêter à la fin du lot courant puis tout réinitialiser ?", stopping: "Arrêt en cours, réinitialisation dès la fin du lot…", confirmReset: "Vider le schéma en étoile et le journal pour relancer la démo depuis le début ?", resetToast: "Démo réinitialisée : schéma en étoile vide, journal purgé" },
+        confirmStop: "Un pipeline est en cours. L'arrêter à la fin du lot courant puis tout réinitialiser ?", stopping: "Arrêt en cours, réinitialisation dès la fin du lot…", confirmReset: "Vider le schéma en étoile et le journal pour relancer la démo depuis le début ?", resetToast: "Démo réinitialisée : schéma en étoile vide, journal purgé", rows: "lignes" },
   en: { ofSource: " % of the source · ", orders: "orders", reconciled: "✓ reconciled with the source: same rows, same amount", sumSource: "sum of fact_sales.amount · source ", sum: "sum of fact_sales.amount",
         rateSub: (x) => `rows / s overall · last batch ${x} rows/s`, parallel: (n) => ` · ${n} batches in parallel`, rowsPerSec: "rows / second", scheduled: "SCHEDULED", ready: "READY", unreachable: "IS UNREACHABLE",
         remaining: "remaining ≈ ", starting: "starting…", done: "done", noRun: "no run yet", waiting: "waiting", loadingFacts: (k, tot, thr) => "loading facts · " + k + (tot ? " / " + tot : "") + " batches" + (thr > 1 ? " · " + thr + " in parallel" : ""),
@@ -220,38 +220,40 @@ const L = {
         anMeta: (n, m, ms) => `${n} values · ${m} fact rows · ${ms} ms`, noData: "no data loaded yet", error: "error: ", dimTag: (d) => `dim_${d} · first 12 rows`, dimEmpty: (d) => `dim_${d} · empty`,
         chartTag: (n, e) => `${n} months · ${e}`, refused: "Start refused", alreadyRunning: "A pipeline is already running", startErr: "Start error: ",
         scheduledToast: (svc, size, thr, at) => `Pipeline scheduled (${svc}, batches of ${size} rows, ${thr} in parallel) · starts at ${at}`, stopToast: "Stop requested: the pipeline will stop at the end of the current batch", err: "Error: ",
-        confirmStop: "A pipeline is running. Stop it at the end of the current batch, then reset everything?", stopping: "Stopping, reset as soon as the batch ends…", confirmReset: "Empty the star schema and the log to restart the demo from scratch?", resetToast: "Demo reset: star schema empty, log purged" }
+        confirmStop: "A pipeline is running. Stop it at the end of the current batch, then reset everything?", stopping: "Stopping, reset as soon as the batch ends…", confirmReset: "Empty the star schema and the log to restart the demo from scratch?", resetToast: "Demo reset: star schema empty, log purged", rows: "rows" }
 }[LANG];
-const STATIC_EN = {
-  "Démo ETL webMethods": "webMethods ETL demo", "table de commandes → schéma en étoile (un iPaaS à la place de l'ETL)": "order table → star schema (an iPaaS instead of the ETL)",
-  "INITIALISATION": "INITIALIZING", "Lots de": "Batches of", "lignes": "rows", "Parallélisme": "Parallelism", "1 lot": "1 batch", "2 lots": "2 batches", "4 lots": "4 batches",
-  "▶ Lancer la démo": "▶ Start the demo", "■ Arrêter": "■ Stop", "↺ Réinitialiser": "↺ Reset",
-  "Faits chargés · fact_sales": "Facts loaded · fact_sales", "Débit": "Throughput", "lignes / seconde (dernier lot)": "rows / second (last batch)", "Temps écoulé": "Elapsed time", "Montant chargé": "Amount loaded",
-  "somme de fact_sales.amount": "sum of fact_sales.amount", "date · client · commercial · produit": "date · customer · sales rep · product",
-  "Schéma en étoile": "Star schema", "en attente": "waiting", "table « classique » dénormalisée": "flat, denormalized table", "table de faits": "fact table", "dimension temporelle": "time dimension", "commerciaux": "sales reps", "clients": "customers", "produits": "products",
-  "Journal d'exécution": "Execution log", "Étape": "Step", "Début": "Start", "Durée": "Duration", "Lignes": "Rows", "Statut": "Status", "Détail": "Details",
-  "Prochaines lignes source à transformer": "Next source rows to transform", "Commande": "Order", "Client": "Customer", "Commercial": "Sales rep", "Produit": "Product", "Qté": "Qty", "PU": "Unit price",
-  "client → dim_customer": "customer → dim_customer", "commercial → dim_salesrep": "sales rep → dim_salesrep", "produit → dim_product": "product → dim_product", "mesures → fact_sales": "measures → fact_sales",
-  "Dernières lignes chargées": "Last rows loaded", "Montant": "Amount", "montant = quantité × prix unitaire, calculé par le flow": "amount = quantity × unit price, computed by the flow",
-  "Explorer le schéma en étoile": "Explore the star schema", "requête sur fact_sales ⋈ dimension": "query on fact_sales ⋈ dimension", "Axe": "Axis", "Année": "Year", "Trimestre": "Quarter", "Mois": "Month", "Semaine (ISO)": "Week (ISO)", "Jour de semaine": "Weekday",
-  "Segment client": "Customer segment", "Département (top 15)": "Department (top 15)", "Client (top 10)": "Customer (top 10)", "Région commerciale": "Sales region", "Commercial (top 10)": "Sales rep (top 10)", "Catégorie produit": "Product category", "Marque": "Brand", "Produit (top 10)": "Product (top 10)",
-  "Mesure": "Measure", "Chiffre d'affaires": "Revenue", "Quantités": "Quantities", "Lignes de commande": "Order lines", "Panier moyen (ligne)": "Average line amount", "Valeur": "Value", "Part": "Share",
-  "Contenu des dimensions": "Dimension contents", "12 premières lignes": "first 12 rows", "Chiffre d'affaires par mois (fact_sales ⋈ dim_date)": "Revenue by month (fact_sales ⋈ dim_date)",
-  "Integration Server webMethods 12.1 · package StarSchemaETL · adaptateur JDBC · PostgreSQL 16 (Docker) · flows et services adaptateur générés par le serveur MCP webmethods-is (putNode)": "webMethods Integration Server 12.1 · StarSchemaETL package · JDBC adapter · PostgreSQL 16 (Docker) · flows and adapter services generated through the webmethods-is MCP server (putNode)"
+const STATIC_FR = {
+  "webMethods ETL demo": "Démo ETL webMethods", "order table → star schema (an iPaaS instead of the ETL)": "table de commandes → schéma en étoile (un iPaaS à la place de l'ETL)",
+  "INITIALIZING": "INITIALISATION", "Batches of": "Lots de", "rows": "lignes", "Parallelism": "Parallélisme", "1 batch": "1 lot", "2 batches": "2 lots", "4 batches": "4 lots",
+  "▶ Start the demo": "▶ Lancer la démo", "■ Stop": "■ Arrêter", "↺ Reset": "↺ Réinitialiser", "Facts loaded · fact_sales": "Faits chargés · fact_sales", "Throughput": "Débit",
+  "rows / second (last batch)": "lignes / seconde (dernier lot)", "Elapsed time": "Temps écoulé", "Amount loaded": "Montant chargé", "sum of fact_sales.amount": "somme de fact_sales.amount",
+  "date · customer · sales rep · product": "date · client · commercial · produit", "Star schema": "Schéma en étoile", "waiting": "en attente",
+  "flat, denormalized table": "table « classique » dénormalisée", "fact table": "table de faits", "time dimension": "dimension temporelle", "sales reps": "commerciaux", "customers": "clients",
+  "products": "produits", "Execution log": "Journal d'exécution", "Step": "Étape", "Start": "Début", "Duration": "Durée", "Rows": "Lignes", "Status": "Statut", "Details": "Détail",
+  "Next source rows to transform": "Prochaines lignes source à transformer", "Order": "Commande", "Customer": "Client", "Sales rep": "Commercial", "Product": "Produit", "Qty": "Qté",
+  "Unit price": "PU", "customer → dim_customer": "client → dim_customer", "sales rep → dim_salesrep": "commercial → dim_salesrep", "product → dim_product": "produit → dim_product",
+  "measures → fact_sales": "mesures → fact_sales", "Last rows loaded": "Dernières lignes chargées", "Amount": "Montant",
+  "amount = quantity × unit price, computed by the flow": "montant = quantité × prix unitaire, calculé par le flow", "Explore the star schema": "Explorer le schéma en étoile",
+  "query on fact_sales ⋈ dimension": "requête sur fact_sales ⋈ dimension", "Axis": "Axe", "Year": "Année", "Quarter": "Trimestre", "Month": "Mois", "Week (ISO)": "Semaine (ISO)",
+  "Weekday": "Jour de semaine", "Customer segment": "Segment client", "Department (top 15)": "Département (top 15)", "Customer (top 10)": "Client (top 10)", "Sales region": "Région commerciale",
+  "Sales rep (top 10)": "Commercial (top 10)", "Product category": "Catégorie produit", "Brand": "Marque", "Product (top 10)": "Produit (top 10)", "Measure": "Mesure",
+  "Revenue": "Chiffre d'affaires", "Quantities": "Quantités", "Order lines": "Lignes de commande", "Average line amount": "Panier moyen (ligne)", "Value": "Valeur", "Share": "Part",
+  "Dimension contents": "Contenu des dimensions", "first 12 rows": "12 premières lignes", "Revenue by month (fact_sales ⋈ dim_date)": "Chiffre d'affaires par mois (fact_sales ⋈ dim_date)",
+  "webMethods Integration Server 12.1 · StarSchemaETL package · JDBC adapter · PostgreSQL 16 (Docker) · flows and adapter services generated through the webmethods-is MCP server (putNode)": "Integration Server webMethods 12.1 · package StarSchemaETL · adaptateur JDBC · PostgreSQL 16 (Docker) · flows et services adaptateur générés par le serveur MCP webmethods-is (putNode)"
 };
 function translateStatic() {
-  if (LANG !== "en") return;
-  document.title = "webMethods ETL demo · star schema"; document.documentElement.lang = "en";
+  if (LANG !== "fr") return;
+  document.title = "Démo ETL webMethods · schéma en étoile"; document.documentElement.lang = "fr";
   const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
-  nodes.forEach(nd => { const k = nd.nodeValue.trim(); if (k && STATIC_EN[k] !== undefined) nd.nodeValue = nd.nodeValue.replace(k, STATIC_EN[k]); });
-  document.querySelectorAll("optgroup").forEach(o => { if (STATIC_EN[o.label]) o.label = STATIC_EN[o.label]; });
+  nodes.forEach(nd => { const k = nd.nodeValue.trim(); if (k && STATIC_FR[k] !== undefined) nd.nodeValue = nd.nodeValue.replace(k, STATIC_FR[k]); });
+  document.querySelectorAll("optgroup").forEach(o => { if (STATIC_FR[o.label]) o.label = STATIC_FR[o.label]; });
   document.querySelectorAll("#chunk option").forEach(o => o.textContent = fmt.format(+o.value));
 }
 translateStatic();
 const $ = id => document.getElementById(id);
 let pendingUntil = 0, curDim = "date", anTimer = 0, source = null, lastStatus = null;
 async function refreshSource() { try { source = (await api("source")).source || null; } catch (e) { source = null; } }
-function chunkInfo(pipe, src) { // "chunk=20000 threads=4 lang=fr" -> {size, threads, total}
+function chunkInfo(pipe, src) { // "chunk=20000 threads=4 lang=en" -> {size, threads, total}
   const m = /chunk=(\d+)(?: threads=(\d+))?/.exec(pipe && pipe.message || "");
   const size = m ? +m[1] : 0; return { size, threads: m && m[2] ? +m[2] : 1, total: size ? Math.ceil(src / size) : 0 };
 }
@@ -299,22 +301,22 @@ function render(d) {
   }
   if (lastStatus !== info.status) { lastStatus = info.status; if (info.status !== "RUNNING") { refreshAnalysis(); refreshDim(); refreshChart(); } }
   $("kDims").textContent = `${fmt.format(n(c.dim_date))} · ${fmt.format(n(c.dim_customer))} · ${fmt.format(n(c.dim_salesrep))} · ${fmt.format(n(c.dim_product))}`;
-  // débit : dernier lot journalisé
+  // throughput: last logged batch
   const chunks = runLog.filter(r => r.step_name.startsWith("FACT_CHUNK"));
   const lc = chunks[chunks.length - 1];
   const globalRate = (running || info.status !== "IDLE") && info.pipe ? fact / Math.max(1, (running ? hms(d.serverTime) - hms(info.pipe.started_at) : n(info.pipe.duration_ms))) * 1000 : 0;
   $("kRate").textContent = globalRate > 0 ? fmt.format(Math.round(globalRate)) : "–";
   document.querySelector("#kRate + .s").textContent = lc && n(lc.duration_ms) > 0 ? L.rateSub(fmt.format(Math.round(n(lc.row_count) / n(lc.duration_ms) * 1000))) + (ci.threads > 1 ? L.parallel(ci.threads) : "") : L.rowsPerSec;
-  // statut
+  // status
   const pill = $("pill"); pill.textContent = pending ? L.scheduled : (info.status === "IDLE" ? L.ready : info.status); pill.className = "pill " + (pending ? "PENDING" : info.status);
   $("btnStart").disabled = running || pending; $("btnStop").disabled = !running; $("btnReset").disabled = pending;
-  // temps écoulé
+  // elapsed time
   if (info.pipe) {
     if (running) { $("kElapsed").textContent = elapsedSince(info.pipe.started_at, d.serverTime); const rem = src - fact; $("kEta").textContent = globalRate > 0 && fact > 0 ? L.remaining + dur(rem / globalRate * 1000) : L.starting; }
     else { $("kElapsed").textContent = dur(info.pipe.duration_ms); $("kEta").textContent = info.status === "DONE" ? L.done : (info.pipe.message && !info.pipe.message.startsWith("chunk=") ? info.pipe.message : ""); }
   } else { $("kElapsed").textContent = "–"; $("kEta").textContent = ""; }
   $("runTag").textContent = info.pipe ? info.pipe.run_id : L.noRun;
-  // étoile
+  // star schema
   $("tSrc").textContent = fmt.format(src); $("tFact").textContent = fmt.format(fact);
   $("tDate").textContent = fmt.format(n(c.dim_date)); $("tCust").textContent = fmt.format(n(c.dim_customer)); $("tRep").textContent = fmt.format(n(c.dim_salesrep)); $("tProd").textContent = fmt.format(n(c.dim_product));
   const lit = (id, v, color) => { const e = $(id); e.classList.toggle("lit", v > 0); e.style.stroke = v > 0 ? color : ""; };
@@ -325,7 +327,7 @@ function render(d) {
   let activeBox = null, stepLabel = L.waiting;
   if (running && info.current) {
     const s = info.current.step_name;
-    // l'étape en cours est celle qui SUIT la dernière journalisée
+    // the current step is the one FOLLOWING the last logged step
     const order = ["TRUNCATE_STAR", "DIM_DATE", "DIM_CUSTOMER", "DIM_SALESREP", "DIM_PRODUCT"];
     const i = order.indexOf(s);
     if (s.startsWith("FACT_CHUNK") || i === order.length - 1) { activeBox = "bFact"; stepLabel = L.loadingFacts(chunks.length, ci.total, ci.threads); }
@@ -336,16 +338,16 @@ function render(d) {
   else if (info.status === "STOPPED") stepLabel = L.stopped;
   if (activeBox) $(activeBox).classList.add("active");
   $("stepTag").textContent = stepLabel; $("flowTxt").textContent = running ? stepLabel : "flow services";
-  // journal
+  // log
   const tb = $("log").querySelector("tbody"); tb.innerHTML = "";
   runLog.forEach((r, i) => {
     const tr = document.createElement("tr");
     if (running && i === runLog.length - 1 && r.step_name !== "PIPELINE") tr.className = "cur";
-    tr.innerHTML = `<td>${r.step_name}</td><td class="k">${(r.started_at || "").slice(0, 12)}</td><td class="num">${r.duration_ms != null && r.duration_ms !== "" ? dur(r.duration_ms) : "…"}</td><td class="num">${r.row_count != null && r.row_count !== "" ? fmt.format(n(r.row_count)) : ""}</td><td><span class="st ${r.status}">${r.status}</span></td><td class="k" title="${r.message || ""}">${(r.message || "").replace(/^chunk=(\d+) threads=(\d+).*$/, (m0, a, b) => (LANG === "en" ? `batches of ${fmt.format(+a)} rows · ${b} thread(s)` : `lots de ${fmt.format(+a)} lignes · ${b} thread(s)`))}</td>`;
+    tr.innerHTML = `<td>${r.step_name}</td><td class="k">${(r.started_at || "").slice(0, 12)}</td><td class="num">${r.duration_ms != null && r.duration_ms !== "" ? dur(r.duration_ms) : "…"}</td><td class="num">${r.row_count != null && r.row_count !== "" ? fmt.format(n(r.row_count)) : ""}</td><td><span class="st ${r.status}">${r.status}</span></td><td class="k" title="${r.message || ""}">${(r.message || "").replace(/^chunk=(\d+) threads=(\d+).*$/, (m0, a, b) => (LANG === "fr" ? `lots de ${fmt.format(+a)} lignes · ${b} thread(s)` : `batches of ${fmt.format(+a)} rows · ${b} thread(s)`))}</td>`;
     tb.appendChild(tr);
   });
   if (running) { const w = document.querySelector(".logwrap"); w.scrollTop = w.scrollHeight; }
-  // tables source / faits
+  // source / fact tables
   const ts = $("src").querySelector("tbody"); ts.innerHTML = "";
   (d.sourceNext || []).forEach(r => { const tr = document.createElement("tr"); tr.innerHTML = `<td class="k">${r.order_line_id}</td><td>${r.order_id}</td><td class="c-date">${r.order_date}</td><td class="c-cust" title="${r.customer_code} · ${r.customer_city} · ${r.customer_segment}">${r.customer_name}</td><td class="c-rep" title="${r.salesrep_code}">${r.salesrep_name}</td><td class="c-prod" title="${r.product_code} · ${r.product_category}">${r.product_name}</td><td class="num">${r.quantity}</td><td class="num">${r.unit_price}</td>`; ts.appendChild(tr); });
   const tf = $("fact").querySelector("tbody"); tf.innerHTML = "";
@@ -380,12 +382,12 @@ async function refreshDim() {
 $("axis").onchange = refreshAnalysis; $("measure").onchange = refreshAnalysis;
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on")); b.classList.add("on"); curDim = b.dataset.dim; refreshDim(); });
 
-function hms(t) { // "HH:MM:SS.mmm" (heure serveur) -> millisecondes depuis minuit
+function hms(t) { // "HH:MM:SS.mmm" (server time) -> milliseconds since midnight
   if (!t) return null; const m = /^(\d+):(\d+):(\d+)(?:\.(\d+))?/.exec(t); if (!m) return null;
   return ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + (+(m[4] || "0").padEnd(3, "0").slice(0, 3));
 }
 function elapsedSince(startedAt, serverTime) {
-  // les deux horodatages viennent de l'IS : indépendant de l'horloge du navigateur et du moment d'ouverture de la page
+  // both timestamps come from the IS: independent of the browser clock and of when the page was opened
   const a = hms(startedAt), b = hms(serverTime);
   if (a == null || b == null) return "–";
   let ms = b - a; if (ms < 0) ms += 86400000;
@@ -402,7 +404,7 @@ function drawChart(rows) {
   [0.5, 1].forEach(f => { const y = H - padB - (H - padB - padT) * f; s += `<line x1="${padL}" y1="${y}" x2="${W - 10}" y2="${y}" stroke="#2a3542" stroke-dasharray="3 4"/><text x="${padL - 6}" y="${y + 4}" text-anchor="end" fill="#8b98a8" font-size="11">${fmtEur.format(max * f)}</text>`; });
   rows.forEach((r, i) => {
     const h = (H - padB - padT) * n(r.amount) / max; const x = padL + i * bw;
-    s += `<rect x="${x + 1}" y="${H - padB - h}" width="${Math.max(1, bw - 2)}" height="${h}" fill="#4589ff" opacity=".85"><title>${r.year_month} · ${fmtEur.format(n(r.amount))} · ${fmt.format(n(r.lines))} lignes</title></rect>`;
+    s += `<rect x="${x + 1}" y="${H - padB - h}" width="${Math.max(1, bw - 2)}" height="${h}" fill="#4589ff" opacity=".85"><title>${r.year_month} · ${fmtEur.format(n(r.amount))} · ${fmt.format(n(r.lines))} ${L.rows}</title></rect>`;
     if (i % 6 === 0) s += `<text x="${x + bw / 2}" y="${H - 10}" text-anchor="middle" fill="#8b98a8" font-size="11">${r.year_month}</text>`;
   });
   svg.innerHTML = s;

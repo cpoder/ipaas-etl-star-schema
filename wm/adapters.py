@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Création des services adaptateur JDBC du package StarSchemaETL via le serveur MCP.
+"""Creation of the StarSchemaETL JDBC adapter services through the MCP server.
 
-Reproduit ce que fait Designer : lookups de domaines de ressources (colInfo,
-types JDBC) puis createAdapterServiceNode avec les propriétés complètes.
-Idempotent : un service existant est supprimé puis recréé.
+Reproduces what Designer does: resource domain lookups (colInfo, JDBC types),
+then createAdapterServiceNode with the complete property set.
+Idempotent: an existing service is deleted then recreated.
 """
 import json, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -11,8 +11,8 @@ from mcpcli import Mcp
 
 PKG = "StarSchemaETL"
 FOLDER = "star.adapters"
-CONN_DWH = "star.connections:dwh"        # LOCAL_TRANSACTION : chargements
-CONN_LOG = "star.connections:dwhLog"     # NO_TRANSACTION    : journal, pilotage, UI
+CONN_DWH = "star.connections:dwh"        # LOCAL_TRANSACTION: loads
+CONN_LOG = "star.connections:dwhLog"     # NO_TRANSACTION:    log, control, UI
 CATALOG = os.environ.get("DB_NAME", "stardemo")
 TPL_CUSTOM = "com.wm.adapter.wmjdbc.services.CustomSQL"
 TPL_BATCH = "com.wm.adapter.wmjdbc.services.BatchInsert"
@@ -26,11 +26,11 @@ COMMON = {
 }
 
 # --------------------------------------------------------------------------
-# Définitions
+# Definitions
 # --------------------------------------------------------------------------
-# CustomSQL : (nom, connexion, sql, [noms des paramètres d'entrée], resultRowField, colInfo forcé)
+# CustomSQL: (name, connection, sql, [input parameter names], resultRowField, forced colInfo)
 CUSTOM_SQL = [
-    # --- chargement (connexion transactionnelle) ---
+    # --- loading (transactional connection) ---
     ("truncateStar", CONN_DWH, "SELECT dwh.truncate_star() AS result", [], None, None),
     ("selectMaxLineId", CONN_DWH,
      "SELECT max(order_line_id) AS max_id, count(*) AS row_count FROM staging.orders", [], None, None),
@@ -57,7 +57,7 @@ CUSTOM_SQL = [
      [("from_id", "BIGINT", "IN"), ("to_id", "BIGINT", "IN"),
       ("order_line_id", "BIGINT"), ("order_id", "VARCHAR"), ("date_key", "VARCHAR"), ("customer_key", "INTEGER"),
       ("salesrep_key", "INTEGER"), ("product_key", "INTEGER"), ("quantity", "INTEGER"), ("unit_price", "NUMERIC")]),
-    # --- journal & pilotage (connexion sans transaction) ---
+    # --- log & control (non-transactional connection) ---
     ("insertLog", CONN_LOG,
      "INSERT INTO dwh.etl_run_log (run_id, step_name, started_at, ended_at, row_count, duration_ms, status, message) "
      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -121,7 +121,7 @@ CUSTOM_SQL = [
      "SELECT d.year_month, sum(f.amount) AS amount, count(*) AS lines "
      "FROM dwh.fact_sales f JOIN dwh.dim_date d ON d.date_key = f.date_key GROUP BY d.year_month ORDER BY d.year_month",
      [], None, [("year_month", "VARCHAR"), ("amount", "NUMERIC"), ("lines", "BIGINT")]),
-    # --- analyses par dimension et aperçu des dimensions (UI « Explorer ») ---
+    # --- dimension analyses and dimension previews (UI "Explore" panel) ---
     ("anYear", CONN_LOG,
      "SELECT CAST(d.year_num AS varchar) AS label, sum(f.amount) AS amount, sum(f.quantity) AS quantity, count(*) AS lines, round(avg(f.amount), 2) AS avg_amount FROM dwh.fact_sales f JOIN dwh.dim_date d ON d.date_key = f.date_key GROUP BY d.year_num ORDER BY d.year_num",
      [], None, [('label', 'VARCHAR'), ('amount', 'NUMERIC'), ('quantity', 'BIGINT'), ('lines', 'BIGINT'), ('avg_amount', 'NUMERIC')]),
@@ -182,7 +182,7 @@ CUSTOM_SQL = [
      [("dim", "VARCHAR"), ("key", "VARCHAR"), ("label", "VARCHAR")]),
 ]
 
-# BatchInsert : (nom, connexion, schéma, table, colonnes exclues (clés techniques auto))
+# BatchInsert: (name, connection, schema, table, excluded columns (auto-generated technical keys))
 BATCH_INSERT = [
     ("insertCustomers", CONN_DWH, "dwh", "dim_customer", ["customer_key"]),
     ("insertSalesreps", CONN_DWH, "dwh", "dim_salesrep", ["salesrep_key"]),
@@ -201,7 +201,7 @@ def lookup(m, conn, tpl, domain, values=None):
 
 
 def parse_colinfo(colinfo):
-    """'0;name;TYPE;IN;\\n1;...' -> (inputs, outputs) listes de (idx, name, jdbcType)."""
+    """'0;name;TYPE;IN;\\n1;...' -> (inputs, outputs) lists of (idx, name, jdbcType)."""
     ins, outs = [], []
     for line in colinfo.replace("\\n", "\n").split("\n"):
         line = line.strip()
@@ -213,7 +213,7 @@ def parse_colinfo(colinfo):
 
 
 def build_colinfo(cols):
-    """[(name, TYPE), (name, TYPE, 'IN')] -> chaîne colInfo (index séparés IN / OUT)."""
+    """[(name, TYPE), (name, TYPE, 'IN')] -> colInfo string (separate IN / OUT indexes)."""
     out, ni, no = [], 0, 0
     for c in cols:
         name, jt = c[0], c[1]
@@ -230,10 +230,10 @@ def custom_sql_settings(m, conn, sql, in_names, result_row_field, forced_colinfo
         forced_colinfo = build_colinfo(forced_colinfo)
     colinfo = forced_colinfo or lookup(m, conn, TPL_CUSTOM, "customSQLcolInfo", [sql])[0]
     if colinfo.strip() == "-1":
-        raise RuntimeError("SQL non analysable par l'adaptateur : fournir la liste des colonnes explicitement")
+        raise RuntimeError("SQL not parseable by the adapter: provide the column list explicitly")
     ins, outs = parse_colinfo(colinfo)
     if len(ins) != len(in_names):
-        raise RuntimeError(f"{len(ins)} paramètres détectés dans le SQL, {len(in_names)} noms fournis: {colinfo!r}")
+        raise RuntimeError(f"{len(ins)} parameters detected in the SQL, {len(in_names)} names provided: {colinfo!r}")
     s = dict(COMMON)
     s.update({
         "sql": sql, "sqlFieldType": "java.lang.String", "colInfo": colinfo,
@@ -265,7 +265,7 @@ JDBC_TYPE_NAMES = {-7: "BIT", -6: "TINYINT", 5: "SMALLINT", 4: "INTEGER", -5: "B
 
 
 def parse_columninfo(columninfo):
-    """Format Designer : 'name\\nTYPE(len) NOT NULL\\n<code>\\n<pos>\\n"\\n' par colonne, colonnes séparées par \\n."""
+    """Designer format: 'name\\nTYPE(len) NOT NULL\\n<code>\\n<pos>\\n"\\n' per column, columns separated by \\n."""
     cols = []
     for entry in columninfo.split("\n"):
         if not entry.strip():
@@ -315,21 +315,21 @@ def node_exists(m, full):
 
 def create(m, name, conn, tpl, settings):
     full = f"{FOLDER}:{name}"
-    # un tableau JSON vide devient Object[] côté IS -> "could not set property ... argument type mismatch"
+    # an empty JSON array becomes Object[] on the IS side -> "could not set property ... argument type mismatch"
     settings = {k: v for k, v in settings.items() if not (isinstance(v, list) and len(v) == 0)}
     args = {"service_name": full, "package_name": PKG, "connection_alias": conn,
             "service_template": tpl, "adapter_service_settings": json.dumps(settings)}
     if node_exists(m, full):
         m.call("node_delete", {"name": full})
     out = m.call("adapter_service_create", args)
-    # createAdapterServiceNode répond 200 même quand l'ART a refusé le nœud : vérifier
+    # createAdapterServiceNode answers 200 even when the ART rejected the node: verify
     if not node_exists(m, full):
-        raise RuntimeError("le nœud n'existe pas après création (voir logs/server.log : ART.117.4030)")
+        raise RuntimeError("the node does not exist after creation (see logs/server.log: ART.117.4030)")
     return out
 
 
 def main():
-    only = sys.argv[1:]  # noms optionnels
+    only = sys.argv[1:]  # optional service names
     m = Mcp()
     ok, ko = [], []
     try:
@@ -355,7 +355,7 @@ def main():
                 ko.append(name); print(f"KO  BatchInsert {name}: {str(e)[:400]}")
     finally:
         m.close()
-    print(f"\n{len(ok)} créés, {len(ko)} en erreur {ko}")
+    print(f"\n{len(ok)} created, {len(ko)} failed {ko}")
     return 1 if ko else 0
 
 
