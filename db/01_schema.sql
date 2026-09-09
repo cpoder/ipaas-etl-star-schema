@@ -1,0 +1,160 @@
+-- =====================================================================
+--  Démo ETL webMethods (remplacement Informatica) — base "winfarm"
+--  Source  : staging.orders  (table "classique" de lignes de commandes,
+--            réplication type Data Lake Infor M3)
+--  Cible   : schéma en étoile dwh.* (1 table de faits + 4 dimensions,
+--            dont une dimension temporelle)
+-- =====================================================================
+
+CREATE SCHEMA IF NOT EXISTS staging;
+CREATE SCHEMA IF NOT EXISTS dwh;
+
+-- ---------------------------------------------------------------------
+-- 1. Table source dénormalisée : une ligne par ligne de commande
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS staging.orders CASCADE;
+CREATE TABLE staging.orders (
+    order_line_id     bigint        PRIMARY KEY,
+    order_id          varchar(12)   NOT NULL,
+    order_date        date          NOT NULL,
+    -- client
+    customer_code     varchar(10)   NOT NULL,
+    customer_name     varchar(80)   NOT NULL,
+    customer_city     varchar(60),
+    customer_dept     varchar(3),
+    customer_segment  varchar(30),
+    -- commercial
+    salesrep_code     varchar(10)   NOT NULL,
+    salesrep_name     varchar(80)   NOT NULL,
+    salesrep_region   varchar(40),
+    -- produit
+    product_code      varchar(12)   NOT NULL,
+    product_name      varchar(100)  NOT NULL,
+    product_category  varchar(40),
+    product_brand     varchar(40),
+    -- mesures
+    quantity          integer       NOT NULL,
+    unit_price        numeric(12,2) NOT NULL
+);
+
+-- ---------------------------------------------------------------------
+-- 2. Schéma en étoile
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS dwh.fact_sales   CASCADE;
+DROP TABLE IF EXISTS dwh.dim_date     CASCADE;
+DROP TABLE IF EXISTS dwh.dim_customer CASCADE;
+DROP TABLE IF EXISTS dwh.dim_salesrep CASCADE;
+DROP TABLE IF EXISTS dwh.dim_product  CASCADE;
+DROP TABLE IF EXISTS dwh.etl_run_log  CASCADE;
+
+-- Dimension temporelle (clé = yyyymmdd)
+CREATE TABLE dwh.dim_date (
+    date_key        integer      PRIMARY KEY,
+    full_date       date         NOT NULL UNIQUE,
+    year_num        smallint     NOT NULL,
+    quarter_num     smallint     NOT NULL,
+    quarter_label   varchar(7)   NOT NULL,   -- ex : 2024-T3
+    month_num       smallint     NOT NULL,
+    month_name      varchar(12)  NOT NULL,
+    year_month      varchar(7)   NOT NULL,   -- ex : 2024-09
+    week_of_year    smallint     NOT NULL,   -- semaine ISO (lundi premier jour)
+    year_week       varchar(8),               -- ex : 2025-S01 (année ISO + semaine)
+    day_of_month    smallint     NOT NULL,
+    day_of_week     smallint     NOT NULL,   -- 1 = lundi ... 7 = dimanche
+    day_name        varchar(10)  NOT NULL,
+    is_weekend      boolean      NOT NULL
+);
+
+CREATE TABLE dwh.dim_customer (
+    customer_key      serial       PRIMARY KEY,
+    customer_code     varchar(10)  NOT NULL UNIQUE,
+    customer_name     varchar(80)  NOT NULL,
+    city              varchar(60),
+    dept              varchar(3),
+    segment           varchar(30)
+);
+
+CREATE TABLE dwh.dim_salesrep (
+    salesrep_key      serial       PRIMARY KEY,
+    salesrep_code     varchar(10)  NOT NULL UNIQUE,
+    salesrep_name     varchar(80)  NOT NULL,
+    region            varchar(40)
+);
+
+CREATE TABLE dwh.dim_product (
+    product_key       serial       PRIMARY KEY,
+    product_code      varchar(12)  NOT NULL UNIQUE,
+    product_name      varchar(100) NOT NULL,
+    category          varchar(40),
+    brand             varchar(40)
+);
+
+-- Table de faits centrale
+CREATE TABLE dwh.fact_sales (
+    order_line_id     bigint        PRIMARY KEY,
+    order_id          varchar(12)   NOT NULL,
+    date_key          integer       NOT NULL REFERENCES dwh.dim_date(date_key),
+    customer_key      integer       NOT NULL REFERENCES dwh.dim_customer(customer_key),
+    salesrep_key      integer       NOT NULL REFERENCES dwh.dim_salesrep(salesrep_key),
+    product_key       integer       NOT NULL REFERENCES dwh.dim_product(product_key),
+    quantity          integer       NOT NULL,
+    unit_price        numeric(12,2) NOT NULL,
+    amount            numeric(14,2) NOT NULL,     -- quantity * unit_price (calculé par le flow)
+    loaded_at         timestamp     NOT NULL DEFAULT now()
+);
+CREATE INDEX ix_fact_sales_date     ON dwh.fact_sales(date_key);
+CREATE INDEX ix_fact_sales_customer ON dwh.fact_sales(customer_key);
+CREATE INDEX ix_fact_sales_product  ON dwh.fact_sales(product_key);
+CREATE INDEX ix_fact_sales_salesrep ON dwh.fact_sales(salesrep_key);
+
+-- Journal d'exécution de l'ETL (alimenté par les flows wm)
+CREATE TABLE dwh.etl_run_log (
+    log_id        serial        PRIMARY KEY,
+    run_id        varchar(40)   NOT NULL,
+    step_name     varchar(60)   NOT NULL,
+    started_at    timestamp     NOT NULL,
+    ended_at      timestamp,
+    row_count     bigint,
+    duration_ms   bigint,
+    status        varchar(20)   NOT NULL DEFAULT 'RUNNING',
+    message       varchar(500)
+);
+CREATE INDEX ix_etl_run_log_run ON dwh.etl_run_log(run_id);
+
+-- Vue de contrôle utile pendant la démo
+CREATE OR REPLACE VIEW dwh.v_etl_last_run AS
+SELECT run_id, step_name, started_at, ended_at, row_count, duration_ms, status, message
+FROM dwh.etl_run_log
+WHERE run_id = (SELECT run_id FROM dwh.etl_run_log ORDER BY log_id DESC LIMIT 1)
+ORDER BY log_id;
+
+-- Vue de contrôle "réconciliation source / cible"
+CREATE OR REPLACE VIEW dwh.v_reconciliation AS
+SELECT 'staging.orders'   AS table_name, count(*) AS row_count, sum(quantity*unit_price) AS total_amount FROM staging.orders
+UNION ALL
+SELECT 'dwh.fact_sales',  count(*), sum(amount) FROM dwh.fact_sales;
+
+-- Vidage de la cible (appelé par le flow d'orchestration)
+CREATE OR REPLACE FUNCTION dwh.truncate_star() RETURNS integer LANGUAGE plpgsql AS $$
+BEGIN
+    TRUNCATE dwh.fact_sales, dwh.dim_date, dwh.dim_customer, dwh.dim_salesrep, dwh.dim_product RESTART IDENTITY;
+    RETURN 1;
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 3. Pilotage de la démo (drapeau d'arrêt + remise à zéro complète)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS dwh.etl_control (
+    ctl_key     varchar(40)  PRIMARY KEY,
+    ctl_value   varchar(200) NOT NULL
+);
+INSERT INTO dwh.etl_control VALUES ('stop_requested', 'false') ON CONFLICT (ctl_key) DO NOTHING;
+
+-- Remise à zéro : vide le schéma en étoile + le journal, réarme le drapeau
+CREATE OR REPLACE FUNCTION dwh.reset_demo() RETURNS integer LANGUAGE plpgsql AS $$
+BEGIN
+    TRUNCATE dwh.fact_sales, dwh.dim_date, dwh.dim_customer, dwh.dim_salesrep, dwh.dim_product RESTART IDENTITY;
+    TRUNCATE dwh.etl_run_log RESTART IDENTITY;
+    UPDATE dwh.etl_control SET ctl_value = 'false' WHERE ctl_key = 'stop_requested';
+    RETURN 1;
+END $$;

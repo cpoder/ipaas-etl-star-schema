@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { margin: 0; width: 1500px; height: 1000px; background: radial-gradient(1200px 800px at 20% 10%, #1b2a3f 0%, #0f1419 55%, #0b0f14 100%); color: #e6edf3; font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column; justify-content: center; padding: 90px 120px; }
+.kicker { color: #33b1ff; font-size: 20px; letter-spacing: 3px; text-transform: uppercase; font-weight: 600; margin-bottom: 18px; }
+h1 { font-size: 58px; line-height: 1.12; margin: 0 0 22px; font-weight: 600; }
+h1 span { color: #4589ff; }
+p.sub { font-size: 26px; color: #b8c4d2; margin: 0 0 40px; max-width: 1150px; line-height: 1.4; }
+ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; font-size: 23px; max-width: 1200px; }
+ul li::before { content: "▸"; color: #42be65; margin-right: 12px; }
+.foot { position: absolute; bottom: 44px; left: 120px; right: 120px; display: flex; justify-content: space-between; color: #8b98a8; font-size: 18px; border-top: 1px solid #2a3542; padding-top: 16px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 60px; font-size: 22px; max-width: 1250px; }
+.grid div { padding: 12px 16px; background: rgba(22,28,36,.8); border: 1px solid #2a3542; border-radius: 8px; }
+.grid b { color: #f1c21b; display: block; font-size: 15px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.arrow { color: #4589ff; }
+.big { font-size: 64px; font-weight: 700; color: #42be65; }
