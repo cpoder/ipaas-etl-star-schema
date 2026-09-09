@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Values version="2.0">
+  <record name="record" javaclass="com.wm.util.Values">
+    <value name="field_dim">0</value>
+    <value name="field_type">record</value>
+    <value name="nillable">true</value>
+    <value name="node_nsName">star.docs:Chunk</value>
+    <value name="node_pkg">StarSchemaETL</value>
+    <value name="node_type">record</value>
+    <array name="rec_fields" type="record" depth="1">
+      <record javaclass="com.wm.util.Values">
+        <value name="field_dim">0</value>
+        <value name="field_name">chunk_no</value>
+        <value name="field_type">string</value>
+        <value name="nillable">true</value>
+        <value name="node_type">field</value>
+      </record>
+      <record javaclass="com.wm.util.Values">
+        <value name="field_dim">0</value>
+        <value name="field_name">from_id</value>
+        <value name="field_type">string</value>
+        <value name="nillable">true</value>
+        <value name="node_type">field</value>
+      </record>
+      <record javaclass="com.wm.util.Values">
+        <value name="field_dim">0</value>
+        <value name="field_name">to_id</value>
+        <value name="field_type">string</value>
+        <value name="nillable">true</value>
+        <value name="node_type">field</value>
+      </record>
+    </array>
+  </record>
+</Values>

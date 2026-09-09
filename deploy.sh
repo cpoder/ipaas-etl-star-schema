@@ -5,6 +5,7 @@
 #   ./deploy.sh data       -> regenerate the ~1M source rows (English labels; data-fr: French labels)
 #   ./deploy.sh is         -> connections + adapter services + flows + UI
 #   ./deploy.sh ui         -> copy the UI only
+#   ./deploy.sh export     -> copy the deployed IS package back into packages/StarSchemaETL
 set -euo pipefail
 cd "$(dirname "$0")"
 IS_HOME=${IS_HOME:-/home/cpo/wm12/IntegrationServer/instances/default}
@@ -36,6 +37,11 @@ is() {
   python3 wm/flows.py       # document types + flow services (putNode)
   ui
 }
+export() {   # copy the deployed package back into packages/ (manifest, ns without the JDBC connections, pub)
+  local src=$IS_HOME/packages/StarSchemaETL dst=packages/StarSchemaETL
+  rm -rf "$dst" && mkdir -p "$dst/pub" && cp "$src/manifest.v3" "$dst/" && cp -r "$src/ns" "$dst/ns" && rm -rf "$dst/ns/star/connections"
+  cp ui/index.html ui/flows.html "$dst/pub/" && echo "[export] $(find "$dst" -type f | wc -l) files in $dst"
+}
 ui() {
   mkdir -p "$PKG_DIR/pub"
   cp ui/index.html "$PKG_DIR/pub/index.html"
@@ -43,7 +49,7 @@ ui() {
   echo "[ui] http://localhost:5555/StarSchemaETL/index.html (Administrator / manage)"
 }
 case "${1:-all}" in
-  db) db ;; data) data ;; data-fr) data _fr ;; is) is ;; ui) ui ;;
+  export) export ;; db) db ;; data) data ;; data-fr) data _fr ;; is) is ;; ui) ui ;;
   all) db; data; is ;;
-  *) echo "usage: $0 [all|db|data|data-fr|is|ui]"; exit 2 ;;
+  *) echo "usage: $0 [all|db|data|data-fr|is|ui|export]"; exit 2 ;;
 esac
