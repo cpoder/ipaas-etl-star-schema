@@ -37,7 +37,7 @@ is() {
   python3 wm/flows.py       # document types + flow services (putNode)
   ui
 }
-export() {   # copy the deployed package back into packages/ (manifest, ns without the JDBC connections, pub)
+export_pkg() {   # copy the deployed package back into packages/ (manifest, ns without the JDBC connections, pub)
   local src=$IS_HOME/packages/StarSchemaETL dst=packages/StarSchemaETL
   rm -rf "$dst" && mkdir -p "$dst/pub" && cp "$src/manifest.v3" "$dst/" && cp -r "$src/ns" "$dst/ns" && rm -rf "$dst/ns/star/connections"
   cp ui/index.html ui/flows.html "$dst/pub/" && echo "[export] $(find "$dst" -type f | wc -l) files in $dst"
@@ -49,7 +49,7 @@ ui() {
   echo "[ui] http://localhost:5555/StarSchemaETL/index.html (Administrator / manage)"
 }
 case "${1:-all}" in
-  export) export ;; db) db ;; data) data ;; data-fr) data _fr ;; is) is ;; ui) ui ;;
+  export) export_pkg ;; db) db ;; data) data ;; data-fr) data _fr ;; is) is ;; ui) ui ;;
   all) db; data; is ;;
   *) echo "usage: $0 [all|db|data|data-fr|is|ui|export]"; exit 2 ;;
 esac
