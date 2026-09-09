@@ -388,7 +388,7 @@ START_PIPELINE = service("star.etl:startPipeline", sig(field("chunkSize"), field
     invoke("pub.scheduler:addOneTimeTask",
            inp=[copy("/runDate;1;0", "/date;1;0"), copy("/runTime;1;0", "/time;1;0"), copy("/chunkSize;1;0", "/inputs;2;0/chunkSize;1;0"),
                 copy("/lang;1;0", "/inputs;2;0/lang;1;0"),
-                setv("/description;1;0", "Winfarm ETL - chargement du schéma en étoile"), setv("/runAsUser;1;0", "Administrator")],
+                setv("/description;1;0", "Star schema ETL - chargement du schéma en étoile"), setv("/runAsUser;1;0", "Administrator")],
            out=[delete("/description;1;0", "/runAsUser;1;0", "/date;1;0", "/time;1;0", "/inputs;2;0", "/type;1;0",
                        "/taskAdded;1;0", "/runDate;1;0", "/runTime;1;0", "/chunkSize;1;0", "/threads;1;0", "/lang;1;0")],
            comment="tâche unique du scheduler IS"),

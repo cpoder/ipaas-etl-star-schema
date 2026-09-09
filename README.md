@@ -22,8 +22,8 @@ pilotage et de visualisation en quasi temps réel.
 
 | Élément | Où | Détail |
 |---|---|---|
-| Base PostgreSQL 16 | conteneur Docker `winfarm-db`, port **5435** (`winfarm`/`winfarm`) | `db/01_schema.sql` (schémas `staging`, `dwh`, journal `etl_run_log`, pilotage `etl_control`), `db/02_generate_data.sql` (jeu de données reproductible) |
-| Integration Server 12.1 | `$IS_HOME` (défaut `/home/cpo/wm12/IntegrationServer/instances/default`), port **5555** (`Administrator`/`manage`) | package **StarSchemaETL** (racine `winfarm`) |
+| Base PostgreSQL 16 | conteneur Docker `stardemo-db`, port **5435** (`stardemo`/`stardemo`, surchargeables par `DB_NAME`, `PG_PORT`, `DB_CONTAINER`) | `db/01_schema.sql` (schémas `staging`, `dwh`, journal `etl_run_log`, pilotage `etl_control`), `db/02_generate_data.sql` (jeu de données reproductible) |
+| Integration Server 12.1 | `$IS_HOME` (défaut `/home/cpo/wm12/IntegrationServer/instances/default`), port **5555** (`Administrator`/`manage`) | package **StarSchemaETL** (namespace `star.*`) |
 | Connexions JDBC | `star.connections:dwh` (LOCAL_TRANSACTION), `star.connections:dwhLog` (NO_TRANSACTION) | adaptateur JDBC 10.3, driver DataDirect PostgreSQL |
 | Services adaptateur | `star.adapters:*` | 24 services CustomSQL / BatchInsert (`wm/adapters.py`) |
 | Flows | `star.etl.steps:*`, `star.etl:*` | générés en JSON putNode (`wm/flows.py`) |
@@ -70,7 +70,7 @@ pilotage et de visualisation en quasi temps réel.
 
 ```bash
 # 1. base (si le conteneur est arrêté)
-docker start winfarm-db
+docker start stardemo-db
 # 2. Integration Server (≈ 40 s)
 /home/cpo/wm12/IntegrationServer/instances/default/bin/startup.sh
 # 3. UI
@@ -88,7 +88,7 @@ Dans l'UI :
 - **↺ Réinitialiser** : vide le schéma en étoile et le journal (`dwh.reset_demo()`) pour repartir de zéro ;
   si un pipeline tourne, il est d'abord arrêté.
 
-Contrôles utiles côté base (`docker exec -it winfarm-db psql -U winfarm`) :
+Contrôles utiles côté base (`docker exec -it stardemo-db psql -U stardemo`) :
 
 ```sql
 SELECT * FROM dwh.v_etl_last_run;      -- journal de la dernière exécution
@@ -119,7 +119,7 @@ l'adaptateur JDBC et le driver PostgreSQL.
 | Table de faits, 50 lots de 20 000 lignes, 4 lots en parallèle | 999 343 | 48 s (≈ 3,2 s par lot, ≈ 21 000 lignes/s) |
 | Réconciliation `dwh.v_reconciliation` | 999 343 = 999 343 | montant 2 993 009 298,57 € identique |
 
-Chaque lot est un sous-flux indépendant (transaction commitée), très en deçà de la limite de 5 minutes de la spécification.
+Chaque lot est un sous-flux indépendant (transaction commitée), très en deçà de l'objectif de 5 minutes par sous-flux.
 
 ## Version anglaise (vidéo publique)
 
@@ -132,12 +132,10 @@ Chaque lot est un sous-flux indépendant (transaction commitée), très en deç�
 - Vidéo : `python3 video/record_demo.py --lang en` (cadre 1920×1200, page dézoomée à 80 %, cartes `*-en.html`),
   puis `make_video.py`, `chapters.py`, `make_thumbnail.py` (fichiers `ipaas-etl-star-schema-demo-en*.mp4`, `thumbnail-en.png`).
 
-## Neutralité des noms (contenus publics)
+## Neutralité des noms
 
-Le package IS s'appelle `StarSchemaETL` (namespace `star.*`) et les écrans, cartes de titre, vignette et post ne
-citent aucun nom d'entreprise (ni client, ni éditeur d'ETL). Les identifiants techniques (conteneur et base
-`winfarm-db` / `winfarm`) et les notes internes (`docs/wm-mcp-server-feedback-poc-winfarm.md`) gardent le nom du
-contexte d'origine : à renommer avant toute publication du dépôt.
+Le package IS s'appelle `StarSchemaETL` (namespace `star.*`), la base `stardemo` ; écrans, cartes de titre, vignette,
+post et ce dépôt ne citent aucun nom d'entreprise (ni client, ni éditeur d'ETL, ni ERP).
 
 ## Vidéo et communication
 
@@ -149,29 +147,21 @@ contexte d'origine : à renommer avant toute publication du dépôt.
   les chargements d'environ 30 % par rapport aux mesures sans capture (1 min 57 s / 49 s). Enregistrer sur une
   machine au repos (aucune compilation ni autre charge en parallèle).
 - `docs/linkedin-post.md` : texte du post LinkedIn (EN/FR), fiche YouTube, vignette `video/thumbnail.png`.
-- `docs/wm-mcp-server-feedback-poc-winfarm.md` : retour d'expérience transmis à l'équipe wm-mcp-server.
+- `docs/wm-mcp-server-feedback-poc-etl.md` : retour d'expérience transmis à l'équipe wm-mcp-server.
 
-## Volumétrie face au cahier des charges
+## Ordre de grandeur
 
-| | Cahier des charges | Démo |
-|---|---|---|
-| Staging | ~80 tables, de quelques Mo à ~1 Go, 120 Mo en moyenne, 9,5 Go au total | `staging.orders` : 999 343 lignes, 245 Mo (224 Mo de données) |
-| Normalisé | ~50 tables, 5,5 Go | dimensions (pas de couche séparée) |
-| Faits | ~90 tables, 75 Mo en moyenne, 6,7 Go | `fact_sales` : 999 343 lignes, 143 Mo avec index |
-| Sous-flux | < 5 min | un lot : 2 à 4 s |
-
-La table de démo vaut deux fois leur table moyenne (staging comme faits) et un quart de leur plus grosse table.
-Extrapolation avec les débits mesurés sans capture d'écran (8 700 lignes/s ≈ 1,9 Mo/s en séquentiel,
-20 000 lignes/s ≈ 4,6 Mo/s à 4 lots) : leur plus grosse table (1 Go) ≈ 9 min / 3,7 min ; rechargement complet
-du périmètre (≈ 15 Go traversés) ≈ 2 h 15 / 55 min, avant tout parallélisme entre tables (scheduler) et en
-rechargement complet, alors qu'un ETL de ce type travaille en delta. Pour une démo à l'échelle de leur plus
-grosse table : 1 000 000 de commandes dans `db/02_generate_data.sql` (≈ 4 M de lignes, ≈ 1 Go).
+La table source (999 343 lignes, 245 Mo) vaut deux fois une table de staging moyenne d'un ERP de taille
+intermédiaire. Avec les débits mesurés sans capture d'écran (8 700 lignes/s ≈ 1,9 Mo/s en séquentiel, 20 000 lignes/s
+≈ 4,6 Mo/s à 4 lots), une table de 1 Go se charge en 9 min / 3,7 min, avant tout parallélisme entre tables
+(scheduler) et en rechargement complet, alors qu'un ETL de ce type travaille en delta. Pour une démo à cette échelle :
+1 000 000 de commandes dans `db/02_generate_data.sql` (≈ 4 M de lignes, ≈ 1 Go).
 
 ## Points d'attention
 
 - Montage vidéo : `video/make_video.py` encode segment par segment (pic RAM ≈ 3,7 Go). Ne pas revenir à un
   `filter_complex` multi-`trim` sur la même entrée : il met la vidéo entière en mémoire et a saturé la machine.
-- Après un redémarrage de WSL, le conteneur `winfarm-db` repart seul mais l'IS doit être relancé (`startup.sh`).
+- Après un redémarrage de WSL, le conteneur `stardemo-db` repart seul mais l'IS doit être relancé (`startup.sh`).
 - Le service `star.api:status` agrège 5 requêtes (dont le CA par mois sur toute la table de faits) : coût
   faible sur 1 M de lignes, à surveiller si le volume est multiplié.
 - La taille de lot borne la mémoire de l'IS (20 000 lignes ≈ quelques dizaines de Mo dans le pipeline) ; le

@@ -8,28 +8,30 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 IS_HOME=${IS_HOME:-/home/cpo/wm12/IntegrationServer/instances/default}
+DB_NAME=${DB_NAME:-stardemo}        # base, utilisateur et mot de passe PostgreSQL (repris par wm/package.py)
+PG_PORT=${PG_PORT:-5435}
 PKG_DIR=$IS_HOME/packages/StarSchemaETL
-DB=winfarm-db
+DB=${DB_CONTAINER:-$DB_NAME-db}
 
 db() {
   if ! docker ps -a --format '{{.Names}}' | grep -qx $DB; then
-    docker run -d --name $DB -p 5435:5432 -e POSTGRES_USER=winfarm -e POSTGRES_PASSWORD=winfarm -e POSTGRES_DB=winfarm \
-      -v winfarm-pgdata:/var/lib/postgresql/data --shm-size=1g --restart unless-stopped postgres:16-alpine \
+    docker run -d --name $DB -p $PG_PORT:5432 -e POSTGRES_USER=$DB_NAME -e POSTGRES_PASSWORD=$DB_NAME -e POSTGRES_DB=$DB_NAME \
+      -v $DB-pgdata:/var/lib/postgresql/data --shm-size=1g --restart unless-stopped postgres:16-alpine \
       -c shared_buffers=512MB -c work_mem=64MB -c maintenance_work_mem=256MB -c max_wal_size=2GB
   else
     docker start $DB >/dev/null
   fi
-  for i in $(seq 1 30); do docker exec $DB pg_isready -U winfarm -d winfarm >/dev/null 2>&1 && break; sleep 1; done
-  docker exec -i $DB psql -U winfarm -d winfarm -v ON_ERROR_STOP=1 -q < db/01_schema.sql
-  docker exec $DB psql -U winfarm -d winfarm -qc "ALTER DATABASE winfarm SET timezone = 'Europe/Paris'"
+  for i in $(seq 1 30); do docker exec $DB pg_isready -U $DB_NAME -d $DB_NAME >/dev/null 2>&1 && break; sleep 1; done
+  docker exec -i $DB psql -U $DB_NAME -d $DB_NAME -v ON_ERROR_STOP=1 -q < db/01_schema.sql
+  docker exec $DB psql -U $DB_NAME -d $DB_NAME -qc "ALTER DATABASE $DB_NAME SET timezone = 'Europe/Paris'"
   echo "[db] schéma appliqué"
 }
 data() {   # jeu de données (français par défaut ; `data-en` pour la variante anglaise)
-  docker exec -i $DB psql -U winfarm -d winfarm -v ON_ERROR_STOP=1 < db/02_generate_data${1:-}.sql | tail -4
+  docker exec -i $DB psql -U $DB_NAME -d $DB_NAME -v ON_ERROR_STOP=1 < db/02_generate_data${1:-}.sql | tail -4
 }
 is() {
   curl -sf -m 5 -u Administrator:manage http://localhost:5555/invoke/wm.server/ping >/dev/null || { echo "IS injoignable sur :5555 (démarrer $IS_HOME/bin/startup.sh)"; exit 1; }
-  python3 wm/package.py     # package, dossiers, connexions JDBC
+  DB_NAME=$DB_NAME PG_PORT=$PG_PORT python3 wm/package.py     # package, dossiers, connexions JDBC
   python3 wm/adapters.py    # services adaptateur JDBC (CustomSQL / BatchInsert)
   python3 wm/flows.py       # types de documents + flow services (putNode)
   ui

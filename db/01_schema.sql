@@ -1,7 +1,7 @@
 -- =====================================================================
---  Démo ETL webMethods (remplacement Informatica) — base "winfarm"
+--  Démo ETL webMethods (à la place d'un ETL classique) — base "stardemo"
 --  Source  : staging.orders  (table "classique" de lignes de commandes,
---            réplication type Data Lake Infor M3)
+--            réplication type data lake d'un ERP)
 --  Cible   : schéma en étoile dwh.* (1 table de faits + 4 dimensions,
 --            dont une dimension temporelle)
 -- =====================================================================

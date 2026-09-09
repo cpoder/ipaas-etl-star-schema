@@ -89,7 +89,7 @@ SELECT b.i AS id,
        'P' || lpad(b.i::text, 6, '0') AS code,
        (ARRAY['','','Premium ','Éco ','Pro '])[1 + floor(b.r1*5)::int] || c.names[1 + floor(b.r2*array_length(c.names,1))::int] AS name,
        c.category,
-       (ARRAY['Vital Concept','Bio Armor','Winfarm','Lacme','Gallagher','Stihl','Husqvarna','Kärcher','La Buvette','Suevia','Patura','Zoetis','Elanco','MSD','Novatech','Lallemand','KWS','Pioneer','Yara','Timac Agro','Aigle','Le Chameau','Delta Plus','Portwest'])[1 + floor(b.r3*24)::int] AS brand,
+       (ARRAY['Vital Concept','Bio Armor','AgriNova','Lacme','Gallagher','Stihl','Husqvarna','Kärcher','La Buvette','Suevia','Patura','Zoetis','Elanco','MSD','Novatech','Lallemand','KWS','Pioneer','Yara','Timac Agro','Aigle','Le Chameau','Delta Plus','Portwest'])[1 + floor(b.r3*24)::int] AS brand,
        round((c.pmin + b.r4*(c.pmax - c.pmin))::numeric, 2) AS price
 FROM base b JOIN gen_cat c ON c.id = b.cat_id;
 

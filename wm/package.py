@@ -6,7 +6,8 @@ from mcpcli import Mcp
 
 PKG = "StarSchemaETL"
 FOLDERS = ["star", "star.connections", "star.adapters", "star.docs", "star.etl", "star.etl.steps", "star.api"]
-DB = {"serverName": "localhost", "portNumber": "5435", "databaseName": "winfarm", "user": "winfarm", "password": "winfarm"}
+DB_NAME = os.environ.get("DB_NAME", "stardemo")
+DB = {"serverName": "localhost", "portNumber": os.environ.get("PG_PORT", "5435"), "databaseName": DB_NAME, "user": DB_NAME, "password": DB_NAME}
 CONNECTIONS = [
     # alias, type de transaction, propriétés supplémentaires, pool
     ("star.connections:dwh", "LOCAL_TRANSACTION", "BatchPerformanceWorkaround=true", 2, 10),   # chargements (transactions explicites)

@@ -13,7 +13,7 @@ PKG = "StarSchemaETL"
 FOLDER = "star.adapters"
 CONN_DWH = "star.connections:dwh"        # LOCAL_TRANSACTION : chargements
 CONN_LOG = "star.connections:dwhLog"     # NO_TRANSACTION    : journal, pilotage, UI
-CATALOG = "winfarm"
+CATALOG = os.environ.get("DB_NAME", "stardemo")
 TPL_CUSTOM = "com.wm.adapter.wmjdbc.services.CustomSQL"
 TPL_BATCH = "com.wm.adapter.wmjdbc.services.BatchInsert"
 

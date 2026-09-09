@@ -1,25 +1,25 @@
-# Retour d'expérience wm-mcp-server — PoC ETL Winfarm (2026-09-08)
+# Retour d'expérience wm-mcp-server — PoC ETL schéma en étoile (2026-09-08)
 
 Contexte : IS 12.1 (`/home/cpo/wm12`, port 5555), WmJDBCAdapter 10.3.0.0.34, driver DataDirect PostgreSQL
-6.0.0.1902, PostgreSQL 16 (Docker `winfarm-db`, port 5435), wm-mcp-server **2.11.1** (commit b1c265e) piloté en
-stdio par `/home/cpo/winfarm/wm/mcpcli.py` (initialize → tools/list → tools/call, protocole 2024-11-05 ; 343 outils).
+6.0.0.1902, PostgreSQL 16 (Docker `stardemo-db`, port 5435), wm-mcp-server **2.11.1** (commit b1c265e) piloté en
+stdio par `wm/mcpcli.py` (initialize → tools/list → tools/call, protocole 2024-11-05 ; 343 outils).
 Objectif : créer par MCP un package complet (2 connexions JDBC, 24 services adaptateur CustomSQL/BatchInsert,
 5 types de documents, 13 flows avec LOOP / BRANCH / TRY-CATCH / transactions explicites, scheduler) — tout a
 fini par marcher, mais chaque point ci-dessous a coûté une itération de débogage (flow.xml sur disque,
 `logs/server.log`, décompilation cfr de `WmJDBCAdapter/code/classes`) alors que l'outil répondait « OK ».
 
-Artefacts vérifiables : `/home/cpo/winfarm/wm/adapters.py` (settings CustomSQL/BatchInsert complets),
-`/home/cpo/winfarm/wm/flows.py` (constructeur putNode + 13 flows), `/home/cpo/winfarm/wm/test_steps.py`,
-sources décompilées dans `/tmp/claude-1002/-home-cpo-winfarm/95c61f10-127b-48c9-8b1b-0f7e1d906bae/scratchpad/cfr/`
+Artefacts vérifiables : `wm/adapters.py` (settings CustomSQL/BatchInsert complets),
+`wm/flows.py` (constructeur putNode + 13 flows), `wm/test_steps.py`,
+sources décompilées (cfr)
 (CustomSQL, BatchUpdateOperation, BatchUpdateColumns, BatchResult, TableList, JDBCAdapterService, FieldMap),
-mémoire `/home/cpo/.claude/projects/-home-cpo-winfarm/memory/wm-mcp-flow-authoring-pitfalls.md`.
+mémoire notes internes.
 
 ## A. Bugs / comportements des outils (avec repro et correctif proposé)
 
 ### A1. `put_node` : échec IS renvoyé comme un texte normal, et nœud requis avant écriture
 - Repro : `put_node` avec le JSON de l'exemple « greet » de `wm://docs/putnode-examples` sur un service
   inexistant → la réponse est le TEXTE `putNode failed: HTTP 500 Internal Server Error: {"$error":"[ISS.0081.9001]
-  Node winfarm.api:greet does not exist" ... at wm.server.nsimpl.lockNode(nsimpl.java:418) at
+  Node demo.api:greet does not exist" ... at wm.server.nsimpl.lockNode(nsimpl.java:418) at
   wm.server.nsimpl.putNode(nsimpl.java:5768)` **sans `isError`** ; un client qui teste le succès de l'appel croit
   que le service est créé (13 flows « OK », aucun sur disque).
 - Cause : sur IS 12.1, `wm.server.ns:putNode` fait `lockNode` avant d'écrire → le nœud doit exister.
@@ -131,7 +131,7 @@ lookup `columnInfo(catalog, schema, table)` (format par colonne `name\nTYPE(len)
 java.sql.Types>\n<position>\n"\n`, colonnes séparées par `\n` ; code 16 = BOOLEAN, 91 = DATE, 93 = TIMESTAMP,
 -5 = BIGINT, 2 = NUMERIC, 4 = INTEGER, 5 = SMALLINT, 12 = VARCHAR) ; exclure les colonnes serial/identity.
 ```json
-{"tables.tableIndexes":["T1"],"tables.catalogName":["winfarm"],"tables.schemaName":["dwh"],"tables.tableName":["dim_customer"],
+{"tables.tableIndexes":["T1"],"tables.catalogName":["stardemo"],"tables.schemaName":["dwh"],"tables.tableName":["dim_customer"],
  "tables.tableType":["TABLE"],"tables.columnInfo":["<chaîne columnInfo>"],"tables.realSchemaName":["dwh"],
  "update.column":["customer_code","customer_name"],"update.columnType":["CHARACTER(10) VARYING NOT NULL","..."],
  "update.JDBCType":["VARCHAR","VARCHAR"],"update.expression":["?","?"],
@@ -184,4 +184,4 @@ Journal sur une 2e connexion `NO_TRANSACTION` pour rendre les écritures visible
 
 ## E. Chiffres du PoC (pour situer)
 999 343 lignes source → 4 dimensions (< 0,5 s chacune) + 999 343 faits en 1 min 57 s (50 lots de 20 000,
-≈ 2,3 s/lot, ≈ 8 700 lignes/s), réconciliation exacte. Détails : `/home/cpo/winfarm/README.md`.
+≈ 2,3 s/lot, ≈ 8 700 lignes/s), réconciliation exacte. Détails : `README.md`.
