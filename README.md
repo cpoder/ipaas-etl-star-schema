@@ -18,6 +18,22 @@ pilotage et de visualisation en quasi temps réel.
  └─────────────────────────────────────┘                     └──────────────┘
 ```
 
+## Captures d'écran
+
+Pipeline en cours (4 lots en parallèle, journal des sous-flux, lignes source et lignes chargées) :
+
+![Pipeline en cours](docs/screenshots/pipeline-en-cours.png)
+
+Pipeline terminé et réconcilié (999 343 faits en 51,5 s), explorateur par trimestre, contenu de la dimension temporelle :
+
+![Pipeline terminé](docs/screenshots/pipeline-termine-explorateur.png)
+
+Chiffre d'affaires par mois calculé sur le schéma en étoile, et page des flows générée depuis l'Integration Server :
+
+![CA mensuel](docs/screenshots/ca-mensuel.png)
+
+![Flows](docs/screenshots/flows.png)
+
 ## Composants
 
 | Élément | Où | Détail |
