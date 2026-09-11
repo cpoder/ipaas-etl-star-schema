@@ -45,6 +45,7 @@ export_pkg() {   # copy the deployed package into the package repository (manife
 }
 ui() {
   mkdir -p "$PKG_DIR/pub"
+  python3 wm/flowdoc.py --lang en >/dev/null && mv ui/flows-en.html ui/flows.html && mv docs/flows-trees-en.md docs/flows-trees.md   # data lineage, pseudo-algorithm, execution flow, dependencies, step trees
   cp ui/index.html "$PKG_DIR/pub/index.html"
   [ -f ui/flows.html ] && cp ui/flows.html "$PKG_DIR/pub/flows.html"
   echo "[ui] http://localhost:5555/StarSchemaETL/index.html (Administrator / manage)"
